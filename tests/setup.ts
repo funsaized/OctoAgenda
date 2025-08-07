@@ -10,7 +10,7 @@ process.env.DEFAULT_TIMEZONE = 'America/New_York';
 process.env.CACHE_ENABLED = 'false';
 
 // Mock console methods to reduce noise in tests
-const _originalConsole = console;
+// const _originalConsole = console;
 beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});

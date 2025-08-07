@@ -5,7 +5,7 @@
   "main": "api/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "vercel dev --listen 3000",
+    "dev:vercel": "vercel dev",
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
