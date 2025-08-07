@@ -101,15 +101,21 @@ export default async function handler(
       res.status(200).send(result.icsContent);
     } else {
       // Return JSON response
-      res.status(200).json({
+      console.log('Result has icsContent?', !!result.icsContent);
+      console.log('ICS content length:', result.icsContent?.length);
+      
+      const response = {
         success: true,
         events: result.events,
         metadata: result.metadata,
+        icsContent: result.icsContent || null,
         ics: result.icsContent ? {
           content: result.icsContent,
           downloadUrl: `/api/scrape?format=ics&url=${encodeURIComponent(config.source.url)}`
         } : undefined
-      });
+      };
+      
+      res.status(200).json(response);
     }
   } catch (error) {
     console.error('Scraping error:', error);

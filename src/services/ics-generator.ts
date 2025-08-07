@@ -54,7 +54,10 @@ export function generateICS(
   }
   
   // Generate ICS string
-  return calendar.toString();
+  const icsString = calendar.toString();
+  console.log('Generated ICS length:', icsString?.length || 0);
+  console.log('First 200 chars:', icsString?.substring(0, 200));
+  return icsString;
 }
 
 /**

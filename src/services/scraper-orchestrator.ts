@@ -144,19 +144,30 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
     let individualICS: Map<string, string> | undefined;
     
     if (validation.validatedEvents.length > 0) {
-      console.log('Generating ICS files');
+      console.log(`Generating ICS files for ${validation.validatedEvents.length} events`);
       
-      // Generate combined ICS
-      icsContent = generateICS(validation.validatedEvents, config.ics);
-      
-      // Generate individual ICS files if requested
-      if (config.ics?.method === 'REQUEST') {
-        individualICS = new Map();
-        for (const event of validation.validatedEvents) {
-          const eventICS = generateSingleEventICS(event, config.ics);
-          individualICS.set(event.title, eventICS);
+      try {
+        // Generate combined ICS
+        console.log('Generating combined ICS file...');
+        icsContent = generateICS(validation.validatedEvents, config.ics);
+        console.log('Combined ICS generated successfully');
+        
+        // Generate individual ICS files if requested
+        if (config.ics?.method === 'REQUEST') {
+          console.log('Generating individual ICS files...');
+          individualICS = new Map();
+          for (const event of validation.validatedEvents) {
+            const eventICS = generateSingleEventICS(event, config.ics);
+            individualICS.set(event.title, eventICS);
+          }
+          console.log(`Generated ${individualICS.size} individual ICS files`);
         }
+      } catch (icsError: any) {
+        console.error('ICS generation error:', icsError);
+        throw icsError;
       }
+    } else {
+      console.log('No valid events to generate ICS for');
     }
     
     const processingTime = Date.now() - startTime;

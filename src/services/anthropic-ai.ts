@@ -182,8 +182,11 @@ export async function extractEvents(
     // Extract text from response
     const responseText = response.content
       .filter(block => block.type === 'text')
-      .map(block => block.text)
+      .map(block => (block as any).text)
       .join('\n');
+    
+    // Debug: Log the AI response
+    console.log('AI Response:', responseText.substring(0, 500));
     
     // Parse and validate the response
     const extractedData = parseAIResponse(responseText);
@@ -259,10 +262,12 @@ function parseAIResponse(responseText: string): ExtractedEventData {
     // Find JSON in the response (AI might include explanation text)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('Failed to find JSON in response:', responseText);
       throw new Error('No JSON found in response');
     }
     
     const jsonStr = jsonMatch[0];
+    console.log('Attempting to parse JSON:', jsonStr.substring(0, 300));
     const parsed = JSON.parse(jsonStr);
     
     // Validate with schema
