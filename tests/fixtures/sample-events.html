@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Events Page</title>
+</head>
+<body>
+    <div class="events-container">
+        <div class="event-item">
+            <h3>Tech Conference 2024</h3>
+            <div class="event-date">March 15, 2024 at 9:00 AM EST</div>
+            <div class="event-location">San Francisco Convention Center, CA</div>
+            <div class="event-description">Annual technology conference featuring latest innovations</div>
+        </div>
+        
+        <div class="event-item">
+            <h3>Virtual Workshop: AI Ethics</h3>
+            <div class="event-date">2024-03-20T14:00:00-05:00</div>
+            <div class="event-location">Online - Zoom</div>
+            <div class="event-description">Discussion on ethical considerations in AI development</div>
+        </div>
+        
+        <article class="event">
+            <h2>Weekly Standup</h2>
+            <time datetime="2024-03-18T10:00:00">Monday, March 18, 2024 at 10:00 AM</time>
+            <address>Office Building A, Room 205, New York, NY</address>
+            <p>Regular team standup meeting</p>
+        </article>
+    </div>
+    
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "name": "Product Launch Event",
+        "startDate": "2024-03-25T18:00:00-04:00",
+        "endDate": "2024-03-25T21:00:00-04:00",
+        "location": {
+            "@type": "Place",
+            "name": "Madison Square Garden",
+            "address": "4 Pennsylvania Plaza, New York, NY 10001"
+        },
+        "description": "Official product launch with live demonstrations",
+        "organizer": {
+            "@type": "Organization",
+            "name": "Tech Corp",
+            "email": "events@techcorp.com"
+        }
+    }
+    </script>
+</body>
+</html>
