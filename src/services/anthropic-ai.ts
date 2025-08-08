@@ -166,38 +166,106 @@ export async function extractEvents(
   const userPrompt = buildUserPrompt(content, context);
   
   try {
-    const response = await client.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 4096,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt
+    // Start with the initial request
+    let allEvents: CalendarEvent[] = [];
+    let extractedEventTitles = new Set<string>(); // Track events we've already seen
+    let conversationMessages = [
+      {
+        role: 'user' as const,
+        content: userPrompt
+      }
+    ];
+    
+    let continuationCount = 0;
+    const maxContinuations = 5; // Prevent infinite loops
+    
+    while (continuationCount < maxContinuations) {
+      const response = await client.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4096, // Maximum allowed for Haiku
+        temperature: 0.2,
+        system: SYSTEM_PROMPT,
+        messages: conversationMessages
+      });
+      
+      // Extract text from response
+      const responseText = response.content
+        .filter(block => block.type === 'text')
+        .map(block => (block as any).text)
+        .join('\n');
+      
+      console.log(`AI Response (attempt ${continuationCount + 1}):`, responseText.substring(0, 500));
+      console.log(`Token usage - Input: ${response.usage?.input_tokens}, Output: ${response.usage?.output_tokens}`);
+      
+      // Check if response was truncated (hit token limit)
+      const wasTruncated = response.usage?.output_tokens === 4096 || isResponseTruncated(responseText);
+      
+      try {
+        // Try to parse the response as-is first
+        const extractedData = parseAIResponse(responseText);
+        const events = convertToCalendarEvents(extractedData, context);
+        
+        // Filter out events we've already seen
+        const newEvents = events.filter(event => {
+          const eventKey = event.title.toLowerCase().trim();
+          if (extractedEventTitles.has(eventKey)) {
+            return false; // Skip duplicates
+          }
+          extractedEventTitles.add(eventKey);
+          return true;
+        });
+        
+        allEvents.push(...newEvents);
+        console.log(`Extracted ${events.length} total events, ${newEvents.length} new events from response ${continuationCount + 1}`);
+        
+        // If not truncated and we got some new events, we're done
+        if (!wasTruncated) {
+          break;
         }
-      ]
-    });
+        
+        // If we didn't get any new events, stop trying
+        if (newEvents.length === 0 && continuationCount > 0) {
+          console.log('No new events found, stopping continuation');
+          break;
+        }
+        
+      } catch (parseError) {
+        // If parsing failed and we suspect truncation, try to continue
+        if (wasTruncated) {
+          console.log('Response appears truncated, attempting continuation...');
+        } else {
+          // If not truncated but still failed to parse, re-throw the error
+          throw parseError;
+        }
+      }
+      
+      // Build list of events we've already extracted
+      const alreadyExtracted = Array.from(extractedEventTitles);
+      const skipList = alreadyExtracted.length > 0 ? 
+        `\n\nDo NOT include these events that were already extracted: ${alreadyExtracted.slice(0, 10).join(', ')}${alreadyExtracted.length > 10 ? ' and others' : ''}` : '';
+      
+      // Ask for continuation with context of previous response
+      conversationMessages.push({
+        role: 'user' as const,
+        content: `The previous response was truncated. Please continue with a new complete JSON response containing ONLY the remaining events that were not yet extracted.${skipList}\n\nProvide a complete JSON object with the events array containing only new/remaining events.`
+      });
+      
+      continuationCount++;
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     
-    // Extract text from response
-    const responseText = response.content
-      .filter(block => block.type === 'text')
-      .map(block => (block as any).text)
-      .join('\n');
+    if (continuationCount >= maxContinuations) {
+      console.warn('Reached maximum continuation attempts');
+    }
     
-    // Debug: Log the AI response
-    console.log('AI Response:', responseText.substring(0, 500));
+    // Deduplicate events in case there are overlaps between responses
+    const uniqueEvents = deduplicateEvents(allEvents);
+    console.log(`Total events after ${continuationCount + 1} requests: ${allEvents.length}, unique: ${uniqueEvents.length}`);
     
-    // Parse and validate the response
-    const extractedData = parseAIResponse(responseText);
+    return uniqueEvents;
     
-    // Convert to CalendarEvent format
-    const events = convertToCalendarEvents(extractedData, context);
-    
-    // Log token usage for cost tracking
-    console.log(`Token usage - Input: ${response.usage?.input_tokens}, Output: ${response.usage?.output_tokens}`);
-    
-    return events;
   } catch (error: any) {
     if (error.status === 429) {
       throw new ScraperError(
@@ -376,6 +444,55 @@ function addDefaultDuration(date: Date): Date {
 }
 
 /**
+ * Check if a response appears to be truncated
+ */
+function isResponseTruncated(responseText: string): boolean {
+  // Look for signs of truncation in JSON
+  const signs = [
+    !responseText.trim().endsWith('}'),           // JSON doesn't end properly
+    responseText.includes('"tit'),               // Cut off in the middle of "title"
+    responseText.includes('"start'),             // Cut off in the middle of "startDateTime"
+    responseText.includes('"loc'),               // Cut off in the middle of "location"
+    /,\s*$/.test(responseText.trim()),           // Ends with a comma
+    /"[^"]*$/.test(responseText.trim()),         // Ends with an unclosed quote
+  ];
+  
+  return signs.some(sign => sign);
+}
+
+/**
+ * Deduplicate events based on title and start time
+ */
+function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
+  const uniqueEvents = new Map<string, CalendarEvent>();
+  
+  for (const event of events) {
+    // Create a unique key based on title and start time
+    const normalizedTitle = event.title.toLowerCase().trim();
+    const startTime = event.startTime.toISOString();
+    const key = `${normalizedTitle}-${startTime}`;
+    
+    if (!uniqueEvents.has(key)) {
+      uniqueEvents.set(key, event);
+    } else {
+      // If we have a duplicate, keep the one with more complete information
+      const existing = uniqueEvents.get(key)!;
+      const hasMoreInfo = (event.description?.length || 0) > (existing.description?.length || 0) ||
+                         (event.location !== 'TBD' && existing.location === 'TBD') ||
+                         (event.organizer && !existing.organizer);
+      
+      if (hasMoreInfo) {
+        uniqueEvents.set(key, event);
+      }
+    }
+  }
+  
+  return Array.from(uniqueEvents.values()).sort((a, b) => 
+    a.startTime.getTime() - b.startTime.getTime()
+  );
+}
+
+/**
  * Estimate API cost for content
  */
 export function estimateCost(content: string): number {
@@ -384,7 +501,7 @@ export function estimateCost(content: string): number {
   // Output: $1.25 per million tokens
   
   const estimatedInputTokens = Math.ceil(content.length / 4);
-  const estimatedOutputTokens = 500; // Rough estimate for response
+  const estimatedOutputTokens = 500; // Estimate for Haiku responses
   
   const inputCost = (estimatedInputTokens / 1_000_000) * 0.25;
   const outputCost = (estimatedOutputTokens / 1_000_000) * 1.25;

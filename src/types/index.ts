@@ -269,7 +269,7 @@ export interface AIConfiguration {
   apiKey: string;
   
   /** Model to use */
-  model: 'claude-3-haiku-20240307' | 'claude-3-sonnet-20240229';
+  model: 'claude-3-haiku-20240307' | 'claude-3-sonnet-20240229' | 'claude-3-5-sonnet-20241022';
   
   /** Maximum tokens for response */
   maxTokens?: number;
