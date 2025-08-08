@@ -4,13 +4,16 @@ Serverless event scraper that automatically extracts calendar events from web pa
 
 ## Features
 
-- 🤖 **AI-Powered Extraction**: Uses Anthropic's Claude Haiku model for intelligent event detection
+- 🤖 **AI-Powered Extraction**: Uses Anthropic's Claude Haiku model with intelligent continuation handling
+- 🔄 **Partial Response Recovery**: Advanced partial-JSON parsing handles truncated AI responses
+- 🛡️ **Robust Error Recovery**: Preserves successfully extracted events even during connection errors
 - 🌐 **Smart Web Scraping**: Handles static and dynamic content with retry logic and caching
 - 🕐 **Timezone Intelligence**: Automatic timezone detection and conversion with DST awareness
 - 📅 **ICS Generation**: RFC-compliant calendar file generation with recurring event support
 - ⚡ **Serverless Architecture**: Runs on Vercel with automatic scaling
 - 🔄 **Scheduled Execution**: Automated daily scraping via cron jobs
 - 📊 **Performance Monitoring**: Built-in metrics, caching, and circuit breakers
+- 🔍 **Comprehensive Debugging**: Detailed logging for troubleshooting extraction issues
 - 🧪 **Comprehensive Testing**: 80%+ test coverage with integration tests
 
 ## Quick Start
@@ -49,7 +52,60 @@ curl "https://your-deployment.vercel.app/api/scrape?url=https://example.com/even
 curl "https://your-deployment.vercel.app/api/scrape?url=https://example.com/events&format=ics"
 ```
 
-## API Endpoints
+## Advanced AI Extraction
+
+### Partial-JSON Recovery
+
+The system uses the `partial-json` library to handle truncated AI responses:
+
+- **Smart Continuation**: Automatically requests more data when responses are truncated
+- **Partial Response Parsing**: Extracts events from incomplete JSON structures
+- **Error Recovery**: Preserves successfully extracted events even if later requests fail
+- **Deduplication**: Multiple strategies to handle overlapping event data across responses
+
+### Real-World Example
+
+```bash
+# Extract events from ESPN MMA schedule (complex page with 100+ events)
+curl "https://your-deployment.vercel.app/api/scrape?url=https://www.espn.com/mma/schedule&format=ics"
+```
+
+The system will:
+1. Parse the HTML content and extract 20-50 events per AI response
+2. Handle response truncation and automatically continue extraction
+3. Use partial-JSON parsing to recover events from incomplete responses
+4. Apply intelligent deduplication to remove overlapping events
+5. Generate a complete ICS file with all unique events
+
+### Debug Output Example
+
+```
+=== AI EXTRACTION STEP ===
+Extracting events with AI
+
+=== RESPONSE 1 PROCESSING ===
+Events extracted from response: 26
+Sample events from response 1:
+  1. "2025 PFL Africa: Johannesburg" - 2025-08-09T12:00:00.000Z
+  2. "UFC Fight Night: Main Event" - 2025-08-15T20:00:00.000Z
+Total events accumulated so far: 26
+
+=== RESPONSE 2 PROCESSING ===
+Events extracted from response: 41
+Total events accumulated so far: 67
+
+=== FINAL PROCESSING ===
+Total events collected before deduplication: 145
+Events after deduplication: 89
+
+=== VALIDATION STEP ===
+Events to validate: 89
+Valid events: 89
+Validation result: VALID
+
+Generating ICS files for 89 events
+Combined ICS generated successfully
+```\n\n## API Endpoints
 
 ### `/api/scrape`
 
@@ -147,9 +203,13 @@ Scheduled endpoint for automated scraping (runs daily at 6 AM UTC).
 
 ### 3. AI Integration (`src/services/anthropic-ai.ts`)
 - Claude 3 Haiku integration for cost efficiency
+- **Partial-JSON Library**: Handles truncated/incomplete JSON responses from AI
+- **Smart Continuation Logic**: Automatically continues extraction for large event lists
+- **Error Recovery**: Preserves successfully extracted events despite connection errors
+- **Enhanced Deduplication**: Multi-strategy deduplication with fallback options
 - Structured prompt engineering for event extraction
-- Response validation and error handling
-- Batch processing with rate limiting
+- Response validation and comprehensive debug logging
+- Configurable continuation limits (default: 20 attempts)
 
 ### 4. Timezone Intelligence (`src/services/timezone-intelligence.ts`)
 - City/state to timezone mapping
@@ -212,6 +272,7 @@ npm run dev
 | `SOURCE_URL` | Default URL to scrape | Required |
 | `DEFAULT_TIMEZONE` | Fallback timezone | `America/New_York` |
 | `BATCH_SIZE` | AI processing batch size | `5` |
+| `MAX_CONTINUATIONS` | Max AI continuation attempts | `20` |
 | `CACHE_TTL` | Cache duration (seconds) | `3600` |
 | `RETRY_ATTEMPTS` | Max retry attempts | `3` |
 | `CALENDAR_ENDPOINT` | CalDAV endpoint | Optional |
@@ -251,9 +312,11 @@ Customize scraping behavior via request body:
 ### Cost Optimization
 
 - Uses Claude 3 Haiku for cost efficiency (~$0.001 per page)
+- **Smart Continuation**: Extracts maximum events per response to reduce API calls
+- **Partial-JSON Parsing**: Recovers data from truncated responses, reducing retries
 - Intelligent content chunking to minimize tokens
-- Regex fallback to reduce AI dependency
-- Caching to avoid redundant API calls
+- Aggressive caching to avoid redundant API calls
+- **Error Recovery**: Prevents loss of extracted events due to connection issues
 
 ### Performance Benchmarks
 
@@ -290,23 +353,29 @@ Configure `MONITORING_WEBHOOK` to receive notifications:
 }
 ```
 
-## Error Handling
+## Advanced Error Handling
 
-The system handles various error scenarios:
+The system provides robust error recovery:
 
+- **Partial Response Recovery**: Uses partial-json library to parse incomplete JSON responses
+- **Connection Error Recovery**: Preserves successfully extracted events despite API failures
+- **Smart Deduplication**: Multiple deduplication strategies with fallback options
+- **Continuation Handling**: Gracefully handles AI response truncation and continuation
 - **Network errors**: Automatic retry with exponential backoff
-- **AI API errors**: Circuit breaker and fallback to regex extraction
-- **Parsing errors**: Graceful degradation with warning logs
-- **Calendar errors**: Non-blocking failures with notification
+- **AI API errors**: Circuit breaker with intelligent fallback strategies
+- **Parsing errors**: Graceful degradation with comprehensive debug logs
+- **Calendar errors**: Non-blocking failures with detailed notification
 
 ## Contributing
 
 ### Adding New Event Sources
 
 1. Test the scraper with your URL
-2. Customize selectors if needed
-3. Add timezone mapping for new locations
-4. Update test fixtures
+2. **Monitor debug logs** to see extraction and parsing details
+3. Customize selectors if needed
+4. **Adjust continuation limits** if pages have many events
+5. Add timezone mapping for new locations
+6. Update test fixtures and validate error recovery
 
 ### Extending AI Prompts
 
@@ -330,6 +399,9 @@ The system handles various error scenarios:
 - Check if the page contains event information
 - Verify timezone detection is working
 - Examine the AI extraction prompt relevance
+- **Check debug logs**: Look for extraction, validation, and deduplication details
+- **Review continuation logs**: Ensure AI responses are being parsed correctly
+- **Verify error recovery**: Check if events were lost due to connection errors
 
 **High API costs:**
 - Enable content pre-filtering
@@ -341,19 +413,28 @@ The system handles various error scenarios:
 - Optimize content chunking strategy
 - Monitor for memory leaks
 
-### Debugging
+### Enhanced Debugging
 
-Enable debug mode:
+The system includes comprehensive debug logging:
+
+**Built-in Debug Features:**
+- **AI Response Parsing**: Detailed logs of each partial-JSON parsing attempt
+- **Event Extraction**: Step-by-step event conversion and validation logs
+- **Deduplication Analysis**: Shows which events are kept/removed and why
+- **Error Recovery Tracing**: Tracks event preservation during error scenarios
+- **Continuation Monitoring**: Logs each AI continuation attempt and token usage
+
+**Enable Enhanced Debug Mode:**
 ```bash
 export DEBUG_MODE=true
 export NODE_ENV=development
 ```
 
-This will:
+This will additionally:
 - Save HTML content to files
 - Log AI prompts and responses
 - Output detailed performance metrics
-- Enable verbose error logging
+- Enable verbose error logging with stack traces
 
 ## License
 
