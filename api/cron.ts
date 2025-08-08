@@ -59,7 +59,8 @@ function initializeServices(): void {
   if (apiKey) {
     initializeAnthropic({
       apiKey,
-      model: 'claude-3-haiku-20240307'
+      model: 'claude-3-haiku-20240307',
+      maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '20', 10)
     });
   }
 

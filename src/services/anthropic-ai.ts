@@ -6,12 +6,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { 
   CalendarEvent, 
-  ExtractedEventData, 
   ScraperError, 
   ErrorCode,
   AIConfiguration 
 } from '../types/index.js';
-import { z } from 'zod';
+import { parse as parsePartialJSON, Allow } from 'partial-json';
 
 /**
  * Extraction context for AI processing
@@ -67,31 +66,6 @@ export interface ValidationError {
   value?: any;
 }
 
-/**
- * AI-extracted event schema for validation
- */
-const ExtractedEventSchema = z.object({
-  title: z.string().min(1),
-  startDateTime: z.string(),
-  endDateTime: z.string().optional(),
-  location: z.string().optional(),
-  description: z.string().optional(),
-  organizer: z.object({
-    name: z.string(),
-    email: z.string().email().optional(),
-    phone: z.string().optional()
-  }).optional(),
-  timezone: z.string().optional(),
-  recurringRule: z.string().optional()
-});
-
-type ExtractedEvent = z.infer<typeof ExtractedEventSchema>;
-
-const ExtractedEventsResponseSchema = z.object({
-  events: z.array(ExtractedEventSchema),
-  detectedTimezone: z.string().optional(),
-  warnings: z.array(z.string()).optional()
-});
 
 /**
  * System prompt for event extraction
@@ -100,23 +74,31 @@ const SYSTEM_PROMPT = `You are an expert at extracting calendar event informatio
 Extract all events and return them as a JSON object with an "events" array.
 Each event should have these fields:
 - title: event name (required)
-- startDateTime: ISO 8601 format with timezone if known (required)
-- endDateTime: ISO 8601 format or calculate from duration
+- startDateTime: LOCAL time in ISO 8601 format WITHOUT timezone suffix (required)
+- endDateTime: LOCAL time in ISO 8601 format WITHOUT timezone suffix
 - location: physical address, venue name, or "Online"/"Virtual" for online events
 - description: brief summary of the event
 - organizer: object with name, email, phone if available
-- timezone: detected timezone or "UNKNOWN"
+- timezone: IANA timezone identifier (e.g., "America/Chicago", "America/New_York")
 - recurringRule: RRULE format if it's a recurring event
 
 Additionally, return:
 - detectedTimezone: the most likely timezone for all events
 - warnings: array of any issues or ambiguities found
 
+CRITICAL TIMEZONE RULES:
+- For times like "6PM CT" or "6PM Central", output startDateTime as "2025-08-12T18:00:00" (WITHOUT Z or timezone offset)
+- Set timezone field to "America/Chicago" for CT/Central Time
+- For "6PM ET" or "6PM Eastern", set timezone to "America/New_York"
+- For "6PM PT" or "6PM Pacific", set timezone to "America/Los_Angeles"
+- NEVER output UTC times (no Z suffix) unless the source explicitly states UTC
+- The startDateTime should represent the local time in the event's timezone
+
 Important guidelines:
 - Parse relative dates (tomorrow, next Friday) based on the current date if provided
-- Detect timezone from context clues (city names, timezone abbreviations)
+- Detect timezone from context clues (city names, timezone abbreviations, venue locations)
 - If timezone is ambiguous, use "UNKNOWN" and add a warning
-- Handle various date formats and convert to ISO 8601
+- Handle various date formats but always output as local time
 - Extract recurring patterns if mentioned (e.g., "every Tuesday")
 - Be conservative - only extract clear event information`;
 
@@ -126,12 +108,18 @@ Important guidelines:
 let anthropicClient: Anthropic | null = null;
 
 /**
+ * Current AI configuration
+ */
+let currentConfig: AIConfiguration | null = null;
+
+/**
  * Initialize Anthropic client
  */
 export function initializeAnthropic(config: AIConfiguration): void {
   anthropicClient = new Anthropic({
     apiKey: config.apiKey,
   });
+  currentConfig = config;
 }
 
 /**
@@ -148,7 +136,11 @@ function getClient(): Anthropic {
         false
       );
     }
-    initializeAnthropic({ apiKey, model: 'claude-3-haiku-20240307' });
+    initializeAnthropic({ 
+      apiKey, 
+      model: 'claude-3-haiku-20240307', 
+      maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '20', 10)
+    });
   }
   return anthropicClient!;
 }
@@ -165,24 +157,23 @@ export async function extractEvents(
   // Build the user prompt
   const userPrompt = buildUserPrompt(content, context);
   
+  let allEvents: CalendarEvent[] = []; // Move outside try block for error recovery
+  
   try {
-    // Start with the initial request
-    let allEvents: CalendarEvent[] = [];
-    let extractedEventTitles = new Set<string>(); // Track events we've already seen
-    let conversationMessages = [
+    let conversationMessages: Array<{role: 'user' | 'assistant', content: string}> = [
       {
-        role: 'user' as const,
+        role: 'user',
         content: userPrompt
       }
     ];
     
     let continuationCount = 0;
-    const maxContinuations = 5; // Prevent infinite loops
+    const maxContinuations = currentConfig?.maxContinuations ?? 20;
     
     while (continuationCount < maxContinuations) {
       const response = await client.messages.create({
         model: 'claude-3-haiku-20240307',
-        max_tokens: 4096, // Maximum allowed for Haiku
+        max_tokens: 4096,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         messages: conversationMessages
@@ -197,76 +188,97 @@ export async function extractEvents(
       console.log(`AI Response (attempt ${continuationCount + 1}):`, responseText.substring(0, 500));
       console.log(`Token usage - Input: ${response.usage?.input_tokens}, Output: ${response.usage?.output_tokens}`);
       
-      // Check if response was truncated (hit token limit)
+      // Check if response was truncated
       const wasTruncated = response.usage?.output_tokens === 4096 || isResponseTruncated(responseText);
       
-      try {
-        // Try to parse the response as-is first
-        const extractedData = parseAIResponse(responseText);
-        const events = convertToCalendarEvents(extractedData, context);
-        
-        // Filter out events we've already seen
-        const newEvents = events.filter(event => {
-          const eventKey = event.title.toLowerCase().trim();
-          if (extractedEventTitles.has(eventKey)) {
-            return false; // Skip duplicates
-          }
-          extractedEventTitles.add(eventKey);
-          return true;
+      // Add the assistant's response to maintain conversation context
+      conversationMessages.push({
+        role: 'assistant',
+        content: responseText
+      });
+      
+      // Parse this response immediately using partial-json
+      const eventsFromResponse = parsePartialJsonResponse(responseText, context);
+      console.log(`=== RESPONSE ${continuationCount + 1} PROCESSING ===`);
+      console.log(`Events extracted from response: ${eventsFromResponse.length}`);
+      if (eventsFromResponse.length > 0) {
+        console.log(`Sample events from response ${continuationCount + 1}:`);
+        eventsFromResponse.slice(0, 3).forEach((event, idx) => {
+          console.log(`  ${idx + 1}. "${event.title}" - ${event.startTime.toISOString()}`);
         });
-        
-        allEvents.push(...newEvents);
-        console.log(`Extracted ${events.length} total events, ${newEvents.length} new events from response ${continuationCount + 1}`);
-        
-        // If not truncated and we got some new events, we're done
-        if (!wasTruncated) {
-          break;
-        }
-        
-        // If we didn't get any new events, stop trying
-        if (newEvents.length === 0 && continuationCount > 0) {
-          console.log('No new events found, stopping continuation');
-          break;
-        }
-        
-      } catch (parseError) {
-        // If parsing failed and we suspect truncation, try to continue
-        if (wasTruncated) {
-          console.log('Response appears truncated, attempting continuation...');
-        } else {
-          // If not truncated but still failed to parse, re-throw the error
-          throw parseError;
-        }
+        allEvents.push(...eventsFromResponse);
+        console.log(`Total events accumulated so far: ${allEvents.length}`);
+      } else {
+        console.log(`No events extracted from response ${continuationCount + 1}`);
       }
       
-      // Build list of events we've already extracted
-      const alreadyExtracted = Array.from(extractedEventTitles);
-      const skipList = alreadyExtracted.length > 0 ? 
-        `\n\nDo NOT include these events that were already extracted: ${alreadyExtracted.slice(0, 10).join(', ')}${alreadyExtracted.length > 10 ? ' and others' : ''}` : '';
+      // If not truncated, we're done
+      if (!wasTruncated) {
+        break;
+      }
       
-      // Ask for continuation with context of previous response
+      // Stop if we're getting non-JSON responses (model is done)
+      if (!responseText.includes('{') && !responseText.includes('events')) {
+        console.log('Model indicates completion');
+        break;
+      }
+      
+      // Simple continuation - just ask to continue
       conversationMessages.push({
-        role: 'user' as const,
-        content: `The previous response was truncated. Please continue with a new complete JSON response containing ONLY the remaining events that were not yet extracted.${skipList}\n\nProvide a complete JSON object with the events array containing only new/remaining events.`
+        role: 'user',
+        content: 'continue'
       });
       
       continuationCount++;
-      
-      // Add a small delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    if (continuationCount >= maxContinuations) {
-      console.warn('Reached maximum continuation attempts');
+    // Final aggregation and deduplication
+    console.log(`\n=== FINAL PROCESSING ===`);
+    console.log(`Total events collected before deduplication: ${allEvents.length}`);
+    if (allEvents.length > 0) {
+      console.log(`Sample of all collected events:`);
+      allEvents.slice(0, 5).forEach((event, idx) => {
+        console.log(`  ${idx + 1}. "${event.title}" - ${event.startTime.toISOString()} - ${event.location}`);
+      });
     }
     
-    // Deduplicate events in case there are overlaps between responses
-    const uniqueEvents = deduplicateEvents(allEvents);
-    console.log(`Total events after ${continuationCount + 1} requests: ${allEvents.length}, unique: ${uniqueEvents.length}`);
+    const uniqueEvents = processAndDeduplicateEvents(allEvents);
+    console.log(`Events after deduplication: ${uniqueEvents.length}`);
+    
+    if (uniqueEvents.length > 0) {
+      console.log(`Sample of unique events:`);
+      uniqueEvents.slice(0, 5).forEach((event, idx) => {
+        console.log(`  ${idx + 1}. "${event.title}" - ${event.startTime.toISOString()} - ${event.location}`);
+      });
+    } else {
+      console.log(`WARNING: No unique events after processing!`);
+    }
     
     return uniqueEvents;
     
   } catch (error: any) {
+    console.log(`\n=== ERROR OCCURRED ===`);
+    console.log(`Error: ${error.message}`);
+    console.log(`Events collected before error: ${allEvents.length}`);
+    
+    // If we have events, try to return them even if there was an error
+    if (allEvents.length > 0) {
+      console.log('Attempting to process collected events despite error...');
+      try {
+        const uniqueEvents = processAndDeduplicateEvents(allEvents);
+        console.log(`Recovered ${uniqueEvents.length} events after error`);
+        
+        if (uniqueEvents.length > 0) {
+          console.log('Returning successfully extracted events despite connection error');
+          return uniqueEvents;
+        }
+      } catch (processingError) {
+        console.log('Failed to process events after error:', processingError instanceof Error ? processingError.message : String(processingError));
+      }
+    }
+    
+    // Only throw the error if we have no events to return
     if (error.status === 429) {
       throw new ScraperError(
         'Anthropic API rate limit exceeded',
@@ -323,88 +335,76 @@ function buildUserPrompt(content: string, context?: ExtractionContext): string {
 }
 
 /**
- * Parse AI response to structured data
+ * Parse AI response using partial-json library
  */
-function parseAIResponse(responseText: string): ExtractedEventData {
-  try {
-    // Find JSON in the response (AI might include explanation text)
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('Failed to find JSON in response:', responseText);
-      throw new Error('No JSON found in response');
-    }
-    
-    const jsonStr = jsonMatch[0];
-    console.log('Attempting to parse JSON:', jsonStr.substring(0, 300));
-    const parsed = JSON.parse(jsonStr);
-    
-    // Validate with schema
-    const validated = ExtractedEventsResponseSchema.parse(parsed);
-    
-    return {
-      events: validated.events as any[], // Raw events from AI
-      confidence: 0.8, // Default confidence for successful extraction
-      warnings: validated.warnings,
-      detectedTimezone: validated.detectedTimezone,
-      metadata: {
-        totalFound: validated.events.length,
-        successfullyParsed: validated.events.length,
-        extractedAt: new Date()
-      }
-    };
-  } catch (error: any) {
-    throw new ScraperError(
-      'Failed to parse AI response',
-      ErrorCode.AI_INVALID_RESPONSE,
-      { responseText, error: error.message },
-      false
-    );
-  }
-}
-
-/**
- * Convert extracted data to CalendarEvent format
- */
-function convertToCalendarEvents(
-  extractedData: ExtractedEventData,
+function parsePartialJsonResponse(
+  responseText: string,
   context?: ExtractionContext
 ): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   
-  for (const extracted of (extractedData.events as any[]) as ExtractedEvent[]) {
-    try {
-      const event: CalendarEvent = {
-        title: extracted.title,
-        startTime: parseDateTime(extracted.startDateTime, context),
-        endTime: extracted.endDateTime ? 
-          parseDateTime(extracted.endDateTime, context) : 
-          addDefaultDuration(parseDateTime(extracted.startDateTime, context)),
-        location: extracted.location || 'TBD',
-        description: extracted.description || '',
-        timezone: extracted.timezone || 
-                 extractedData.detectedTimezone || 
-                 context?.timezoneHint || 
-                 'America/New_York',
-        organizer: extracted.organizer,
-        recurringRule: extracted.recurringRule
-      };
-      
-      events.push(event);
-    } catch (error) {
-      console.error(`Failed to convert event: ${error}`);
-      // Continue with other events
+  console.log('\n=== PARSING PARTIAL JSON RESPONSE ===');
+  console.log(`Response length: ${responseText.length} characters`);
+  console.log(`Response preview: ${responseText.substring(0, 300)}...`);
+  
+  try {
+    // Find JSON in the response (AI might include explanation text)
+    const jsonMatch = responseText.match(/\{[\s\S]*$/);
+    if (!jsonMatch) {
+      console.log('No JSON structure found in response');
+      console.log('Full response text:', responseText);
+      return events;
+    }
+    
+    const jsonStr = jsonMatch[0];
+    console.log(`JSON extracted from response (${jsonStr.length} chars)`);
+    console.log(`JSON preview: ${jsonStr.substring(0, 300)}...`);
+    
+    // Use partial-json to parse potentially incomplete JSON
+    console.log('Attempting to parse with partial-json library...');
+    const parsed = parsePartialJSON(jsonStr, Allow.ALL);
+    console.log('Partial-json parsing successful!');
+    console.log('Parsed result type:', typeof parsed);
+    console.log('Parsed result keys:', parsed && typeof parsed === 'object' ? Object.keys(parsed) : 'N/A');
+    
+    // Extract events from the parsed structure
+    const extractedEvents = extractEventsFromParsedJson(parsed, context);
+    events.push(...extractedEvents);
+    
+    console.log(`Total events extracted from this response: ${events.length}`);
+    
+  } catch (error) {
+    console.log('Error in partial JSON parsing:', error instanceof Error ? error.message : String(error));
+    if (error instanceof Error) {
+      console.log('Error stack:', error.stack);
     }
   }
   
   return events;
 }
 
+
 /**
  * Parse datetime string to Date object
  */
-function parseDateTime(dateTimeStr: string, context?: ExtractionContext): Date {
+function parseDateTime(dateTimeStr: string, context?: ExtractionContext, timezone?: string): Date {
   try {
-    // Try parsing as ISO 8601
+    // If the dateTimeStr looks like local time (no timezone info) and we have a timezone
+    if (timezone && !dateTimeStr.includes('Z') && !dateTimeStr.includes('+') && !dateTimeStr.includes('-', 10)) {
+      // This is a local time, we need to interpret it in the given timezone
+      // For now, just parse it as-is and let the ICS generator handle the timezone
+      // The ICS generator should use the timezone field to properly convert
+      const date = new Date(dateTimeStr + 'Z'); // Temporarily treat as UTC for parsing
+      if (!isNaN(date.getTime())) {
+        // Adjust back by removing the Z interpretation - we want local time
+        const localDate = new Date(dateTimeStr);
+        if (!isNaN(localDate.getTime())) {
+          return localDate;
+        }
+      }
+    }
+    
+    // Try parsing as ISO 8601 (with or without timezone)
     const date = new Date(dateTimeStr);
     if (!isNaN(date.getTime())) {
       return date;
@@ -444,6 +444,262 @@ function addDefaultDuration(date: Date): Date {
 }
 
 /**
+ * Extract events from parsed JSON structure
+ */
+function extractEventsFromParsedJson(
+  parsed: any,
+  context?: ExtractionContext
+): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+  
+  console.log('\n--- EXTRACTING EVENTS FROM PARSED JSON ---');
+  console.log('Parsed object type:', typeof parsed);
+  console.log('Parsed object keys:', parsed ? Object.keys(parsed).slice(0, 10) : 'null/undefined');
+  
+  if (!parsed || typeof parsed !== 'object') {
+    console.log('Parsed object is null or not an object, returning empty events');
+    return events;
+  }
+  
+  try {
+    // Strategy 1: Look for events array in parsed object
+    if (Array.isArray(parsed.events)) {
+      console.log(`Strategy 1: Found ${parsed.events.length} events in events array`);
+      let convertedCount = 0;
+      for (let i = 0; i < parsed.events.length; i++) {
+        const eventData = parsed.events[i];
+        console.log(`Processing event ${i + 1}: "${eventData?.title || 'NO TITLE'}"`);
+        const event = convertSingleEventToCalendarEvent(eventData, context);
+        if (event) {
+          events.push(event);
+          convertedCount++;
+        } else {
+          console.log(`  Failed to convert event ${i + 1}`);
+        }
+      }
+      console.log(`Successfully converted ${convertedCount} out of ${parsed.events.length} events`);
+    }
+    // Strategy 2: Check if parsed object itself is an array of events
+    else if (Array.isArray(parsed)) {
+      console.log(`Strategy 2: Found ${parsed.length} events in direct array`);
+      let convertedCount = 0;
+      for (let i = 0; i < parsed.length; i++) {
+        const eventData = parsed[i];
+        console.log(`Processing direct array event ${i + 1}: "${eventData?.title || 'NO TITLE'}"`);
+        const event = convertSingleEventToCalendarEvent(eventData, context);
+        if (event) {
+          events.push(event);
+          convertedCount++;
+        } else {
+          console.log(`  Failed to convert direct array event ${i + 1}`);
+        }
+      }
+      console.log(`Successfully converted ${convertedCount} out of ${parsed.length} direct array events`);
+    }
+    // Strategy 3: Check if parsed object is a single event
+    else if (parsed.title && parsed.startDateTime) {
+      console.log('Strategy 3: Found single event in parsed object');
+      const event = convertSingleEventToCalendarEvent(parsed, context);
+      if (event) {
+        events.push(event);
+        console.log('Successfully converted single event');
+      } else {
+        console.log('Failed to convert single event');
+      }
+    } else {
+      console.log('No recognizable event structure found in parsed object');
+      console.log('Parsed object structure:', JSON.stringify(parsed, null, 2).substring(0, 500));
+    }
+    
+  } catch (error) {
+    console.log('Error extracting events from parsed JSON:', error instanceof Error ? error.message : String(error));
+    console.log('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+  }
+  
+  console.log(`Final result: ${events.length} events extracted`);
+  return events;
+}
+
+/**
+ * Process and deduplicate all collected events
+ */
+function processAndDeduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
+  console.log('\n--- PROCESSING AND DEDUPLICATING EVENTS ---');
+  console.log(`Input: ${events.length} events`);
+  
+  if (events.length === 0) {
+    console.log('No events to process, returning empty array');
+    return events;
+  }
+  
+  // Sort events by start time first
+  console.log('Sorting events by start time...');
+  const sortedEvents = events.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+  console.log(`Sorted ${sortedEvents.length} events`);
+  
+  // Enhanced deduplication with better matching
+  const uniqueEvents = new Map<string, CalendarEvent>();
+  let duplicatesFound = 0;
+  
+  console.log('Starting deduplication process...');
+  for (let i = 0; i < sortedEvents.length; i++) {
+    const event = sortedEvents[i];
+    
+    if (!event) {
+      console.log(`Warning: Event at index ${i} is undefined, skipping`);
+      continue;
+    }
+    
+    // Create a robust key for deduplication
+    const normalizedTitle = event.title.toLowerCase().trim().replace(/\s+/g, ' ');
+    const startTime = event.startTime.toISOString();
+    const location = event.location.toLowerCase().trim();
+    const key = `${normalizedTitle}-${startTime}-${location}`;
+    
+    if (i < 5 || i % 10 === 0) { // Log first 5 and every 10th event
+      console.log(`Event ${i + 1}: "${event.title}" - ${event.startTime.toISOString()} - Key: ${key.substring(0, 50)}...`);
+    }
+    
+    if (!uniqueEvents.has(key)) {
+      uniqueEvents.set(key, event);
+    } else {
+      duplicatesFound++;
+      // If we have a duplicate, keep the one with more complete information
+      const existing = uniqueEvents.get(key)!;
+      const hasMoreInfo = (
+        (event.description?.length || 0) > (existing.description?.length || 0) ||
+        (event.location !== 'TBD' && existing.location === 'TBD') ||
+        (event.organizer && !existing.organizer) ||
+        (event.url && !existing.url)
+      );
+      
+      if (hasMoreInfo) {
+        console.log(`  Replacing duplicate with more complete version: "${event.title}"`);
+        uniqueEvents.set(key, event);
+      } else {
+        console.log(`  Keeping existing version of: "${event.title}"`);
+      }
+    }
+  }
+  
+  const result = Array.from(uniqueEvents.values());
+  console.log(`Deduplication complete: ${events.length} → ${result.length} events (${duplicatesFound} duplicates removed)`);
+  
+  if (result.length === 0) {
+    console.log('WARNING: All events were removed during deduplication!');
+    console.log('Sample of original events for debugging:');
+    events.slice(0, 5).forEach((event, idx) => {
+      const normalizedTitle = event.title.toLowerCase().trim().replace(/\s+/g, ' ');
+      const startTime = event.startTime.toISOString();
+      const location = event.location.toLowerCase().trim();
+      const key = `${normalizedTitle}-${startTime}-${location}`;
+      console.log(`  ${idx + 1}. "${event.title}" - ${event.startTime.toISOString()} - ${event.location}`);
+      console.log(`     Key: ${key}`);
+    });
+    
+    // If all events were removed, this suggests massive duplication across responses
+    // Let's be less aggressive with deduplication
+    console.log('Attempting less aggressive deduplication...');
+    const lessAggressiveResult = deduplicateWithTitleAndTimeOnly(events);
+    console.log(`Less aggressive deduplication: ${events.length} → ${lessAggressiveResult.length} events`);
+    return lessAggressiveResult;
+  }
+  
+  return result;
+}
+
+/**
+ * Less aggressive deduplication using only title and start time (no location)
+ * Used as fallback when main deduplication removes all events
+ */
+function deduplicateWithTitleAndTimeOnly(events: CalendarEvent[]): CalendarEvent[] {
+  console.log('\n--- FALLBACK DEDUPLICATION (Title + Time Only) ---');
+  const uniqueEvents = new Map<string, CalendarEvent>();
+  
+  for (const event of events) {
+    const normalizedTitle = event.title.toLowerCase().trim().replace(/\s+/g, ' ');
+    const startTime = event.startTime.toISOString();
+    const key = `${normalizedTitle}-${startTime}`;
+    
+    if (!uniqueEvents.has(key)) {
+      uniqueEvents.set(key, event);
+    } else {
+      // Keep the one with more complete information
+      const existing = uniqueEvents.get(key)!;
+      const hasMoreInfo = (
+        (event.description?.length || 0) > (existing.description?.length || 0) ||
+        (event.location !== 'TBD' && existing.location === 'TBD') ||
+        (event.organizer && !existing.organizer)
+      );
+      
+      if (hasMoreInfo) {
+        uniqueEvents.set(key, event);
+      }
+    }
+  }
+  
+  const result = Array.from(uniqueEvents.values()).sort((a, b) => 
+    a.startTime.getTime() - b.startTime.getTime()
+  );
+  
+  console.log(`Fallback deduplication result: ${result.length} events`);
+  return result;
+}
+
+/**
+ * Convert a single event object to CalendarEvent format
+ */
+function convertSingleEventToCalendarEvent(
+  extracted: any,
+  context?: ExtractionContext
+): CalendarEvent | null {
+  try {
+    console.log(`  Converting event: title="${extracted?.title}", startDateTime="${extracted?.startDateTime}"`);
+    
+    if (!extracted || typeof extracted !== 'object') {
+      console.log(`  Event conversion failed: extracted is not an object`);
+      return null;
+    }
+    
+    if (!extracted.title) {
+      console.log(`  Event conversion failed: missing title`);
+      return null;
+    }
+    
+    if (!extracted.startDateTime) {
+      console.log(`  Event conversion failed: missing startDateTime`);
+      return null;
+    }
+    
+    const eventTimezone = extracted.timezone || context?.timezoneHint || 'America/New_York';
+    console.log(`  Using timezone: ${eventTimezone}`);
+    
+    const startTime = parseDateTime(extracted.startDateTime, context, eventTimezone);
+    const endTime = extracted.endDateTime ? 
+      parseDateTime(extracted.endDateTime, context, eventTimezone) : 
+      addDefaultDuration(startTime);
+    
+    const event: CalendarEvent = {
+      title: extracted.title,
+      startTime,
+      endTime,
+      location: extracted.location || 'TBD',
+      description: extracted.description || '',
+      timezone: eventTimezone,
+      organizer: extracted.organizer,
+      recurringRule: extracted.recurringRule
+    };
+    
+    console.log(`  Successfully converted: "${event.title}" at ${event.startTime.toISOString()}`);
+    return event;
+  } catch (error) {
+    console.error(`  Event conversion error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`  Event data:`, JSON.stringify(extracted, null, 2).substring(0, 200));
+    return null;
+  }
+}
+
+/**
  * Check if a response appears to be truncated
  */
 function isResponseTruncated(responseText: string): boolean {
@@ -460,37 +716,6 @@ function isResponseTruncated(responseText: string): boolean {
   return signs.some(sign => sign);
 }
 
-/**
- * Deduplicate events based on title and start time
- */
-function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
-  const uniqueEvents = new Map<string, CalendarEvent>();
-  
-  for (const event of events) {
-    // Create a unique key based on title and start time
-    const normalizedTitle = event.title.toLowerCase().trim();
-    const startTime = event.startTime.toISOString();
-    const key = `${normalizedTitle}-${startTime}`;
-    
-    if (!uniqueEvents.has(key)) {
-      uniqueEvents.set(key, event);
-    } else {
-      // If we have a duplicate, keep the one with more complete information
-      const existing = uniqueEvents.get(key)!;
-      const hasMoreInfo = (event.description?.length || 0) > (existing.description?.length || 0) ||
-                         (event.location !== 'TBD' && existing.location === 'TBD') ||
-                         (event.organizer && !existing.organizer);
-      
-      if (hasMoreInfo) {
-        uniqueEvents.set(key, event);
-      }
-    }
-  }
-  
-  return Array.from(uniqueEvents.values()).sort((a, b) => 
-    a.startTime.getTime() - b.startTime.getTime()
-  );
-}
 
 /**
  * Estimate API cost for content

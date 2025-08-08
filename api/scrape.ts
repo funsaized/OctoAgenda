@@ -4,10 +4,10 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { 
-  scrapeEvents, 
+import {
+  scrapeEvents,
   validateConfig,
-  ScraperConfig 
+  ScraperConfig
 } from '../src/services/scraper-orchestrator.js';
 import { initializeAnthropic } from '../src/services/anthropic-ai.js';
 import { initializeCache } from '../src/services/html-fetcher.js';
@@ -23,10 +23,11 @@ function initializeServices(): void {
   if (apiKey) {
     initializeAnthropic({
       apiKey,
-      model: 'claude-3-haiku-20240307'
+      model: 'claude-3-haiku-20240307',
+      maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '20', 10)
     });
   }
-  
+
   // Initialize cache
   initializeCache({
     enabled: process.env.CACHE_ENABLED !== 'false',
@@ -45,18 +46,18 @@ export default async function handler(
 ): Promise<void> {
   // Initialize services
   initializeServices();
-  
+
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
+
   // Handle preflight
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
-  
+
   // Only accept GET and POST
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({
@@ -65,11 +66,11 @@ export default async function handler(
     });
     return;
   }
-  
+
   try {
     // Get configuration
     const config = await getConfig(req);
-    
+
     // Validate configuration
     const errors = validateConfig(config);
     if (errors.length > 0) {
@@ -79,31 +80,31 @@ export default async function handler(
       });
       return;
     }
-    
+
     // Log the scraping request
     console.log(`Scraping ${config.source.url}`);
-    
+
     // Perform scraping
     const result = await scrapeEvents(config);
-    
+
     // Check output format
     const format = req.query.format || req.body?.format || 'json';
-    
+
     if (format === 'ics' && result.icsContent) {
       // Return ICS file
       const filename = req.query.filename || 'events.ics';
       const headers = getICSHeaders(filename as string);
-      
+
       Object.entries(headers).forEach(([key, value]) => {
         res.setHeader(key, value);
       });
-      
+
       res.status(200).send(result.icsContent);
     } else {
       // Return JSON response
       console.log('Result has icsContent?', !!result.icsContent);
       console.log('ICS content length:', result.icsContent?.length);
-      
+
       const response = {
         success: true,
         events: result.events,
@@ -114,12 +115,12 @@ export default async function handler(
           downloadUrl: `/api/scrape?format=ics&url=${encodeURIComponent(config.source.url)}`
         } : undefined
       };
-      
+
       res.status(200).json(response);
     }
   } catch (error) {
     console.error('Scraping error:', error);
-    
+
     if (error instanceof ScraperError) {
       res.status(getErrorStatusCode(error.code)).json({
         error: error.code,
@@ -143,7 +144,7 @@ export default async function handler(
 async function getConfig(req: VercelRequest): Promise<ScraperConfig> {
   // Check if URL is provided in query or body
   const url = req.query.url || req.body?.url || process.env.SOURCE_URL;
-  
+
   if (!url) {
     throw new ScraperError(
       'No URL provided',
@@ -152,7 +153,7 @@ async function getConfig(req: VercelRequest): Promise<ScraperConfig> {
       false
     );
   }
-  
+
   // Build configuration
   const config: ScraperConfig = {
     source: {
@@ -163,7 +164,7 @@ async function getConfig(req: VercelRequest): Promise<ScraperConfig> {
       timeout: req.body?.timeout ? parseInt(req.body.timeout as string, 10) : undefined
     },
     processing: {
-      batchSize: req.body?.batchSize ? parseInt(req.body.batchSize, 10) : 5,
+      batchSize: req.body?.batchSize ? parseInt(req.body.batchSize, 20) : 20,
       timezone: {
         default: (req.query.timezone || req.body?.timezone || process.env.DEFAULT_TIMEZONE || 'America/New_York') as string,
         autoDetect: req.body?.autoDetectTimezone !== false
@@ -189,7 +190,9 @@ async function getConfig(req: VercelRequest): Promise<ScraperConfig> {
       method: req.body?.inviteMode ? 'REQUEST' : 'PUBLISH'
     }
   };
-  
+
+  process.env.DEBUG && console.log('Config:', config);
+
   return config;
 }
 
@@ -203,14 +206,14 @@ function getErrorStatusCode(code: ErrorCode): number {
     case ErrorCode.INVALID_DATE_FORMAT:
     case ErrorCode.MISSING_REQUIRED_FIELD:
       return 400;
-    
+
     case ErrorCode.HTTP_NOT_FOUND:
       return 404;
-    
+
     case ErrorCode.AI_RATE_LIMIT:
     case ErrorCode.RATE_LIMIT_EXCEEDED:
       return 429;
-    
+
     case ErrorCode.NETWORK_ERROR:
     case ErrorCode.TIMEOUT:
     case ErrorCode.HTTP_SERVER_ERROR:

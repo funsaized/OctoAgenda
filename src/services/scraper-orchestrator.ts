@@ -3,7 +3,7 @@
  * Coordinates all services to extract events and generate ICS files
  */
 
-import { 
+import {
   CalendarEvent,
   ProcessingOptions,
   SourceConfiguration,
@@ -32,34 +32,34 @@ export interface ScraperConfig {
 export interface ScraperResult {
   /** Extracted events */
   events: CalendarEvent[];
-  
+
   /** Generated ICS content */
   icsContent?: string;
-  
+
   /** Individual ICS files for each event */
   individualICS?: Map<string, string>;
-  
+
   /** Extraction metadata */
   metadata: {
     /** Total events found */
     totalEvents: number;
-    
+
     /** Successfully processed events */
     processedEvents: number;
-    
+
     /** Failed events */
     failedEvents: number;
-    
+
     /** Processing time in ms */
     processingTime: number;
-    
+
     /** AI token usage */
     tokenUsage?: {
       input: number;
       output: number;
       estimatedCost: number;
     };
-    
+
     /** Warnings */
     warnings: string[];
   };
@@ -86,7 +86,8 @@ const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
   },
   ai: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
-    model: 'claude-3-haiku-20240307'
+    model: 'claude-3-haiku-20240307',
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '20', 10)
   }
 };
 
@@ -97,7 +98,7 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
   const startTime = Date.now();
   const warnings: string[] = [];
   const processing = { ...DEFAULT_PROCESSING_OPTIONS, ...config.processing };
-  
+
   try {
     // Step 1: Fetch HTML
     console.log(`Fetching HTML from ${config.source.url}`);
@@ -107,7 +108,7 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
       timeout: config.source.timeout,
       useCache: processing.cache.enabled
     });
-    
+
     if (!html) {
       throw new ScraperError(
         'No HTML content received',
@@ -116,42 +117,70 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
         false
       );
     }
-    
+
     // Step 2: Preprocess HTML
     console.log('Preprocessing HTML content');
     const processedContent = preprocessHTML(html);
-    
+
     if (!hasEventContent(processedContent)) {
       warnings.push('No event content detected in HTML');
     }
-    
+
     // Step 3: Extract events using AI
+    console.log('\n=== AI EXTRACTION STEP ===');
     console.log('Extracting events with AI');
-    const events = await extractEventsFromContent(
-      processedContent,
-      config.source,
-      processing
-    );
-    
+    let events: CalendarEvent[] = [];
+    try {
+      events = await extractEventsFromContent(
+        processedContent,
+        config.source,
+        processing
+      );
+      console.log(`AI extraction successful: ${events.length} events extracted`);
+    } catch (extractionError: any) {
+      console.log(`AI extraction error: ${extractionError.message}`);
+      console.log('Extraction error details:', extractionError);
+      // Re-throw the error since this is a critical failure
+      throw extractionError;
+    }
+
     // Step 4: Validate extracted events
-    const validation = validateExtraction(events);
-    if (!validation.valid) {
-      warnings.push(...validation.errors.map(e => e.message));
+    console.log(`\n=== VALIDATION STEP ===`);
+    console.log(`Events to validate: ${events.length}`);
+    if (events.length > 0) {
+      console.log('Sample events for validation:');
+      events.slice(0, 3).forEach((event, idx) => {
+        console.log(`  ${idx + 1}. \"${event.title}\" - ${event.startTime.toISOString()}`);
+      });
     }
     
+    const validation = validateExtraction(events);
+    console.log(`Validation result: ${validation.valid ? 'VALID' : 'INVALID'}`);
+    console.log(`Valid events: ${validation.validatedEvents.length}`);
+    console.log(`Invalid events: ${validation.invalidEvents.length}`);
+    console.log(`Validation errors: ${validation.errors.length}`);
+    
+    if (!validation.valid) {
+      console.log('Validation errors:');
+      validation.errors.forEach((error, idx) => {
+        console.log(`  ${idx + 1}. ${error.message} (event ${error.eventIndex}, field: ${error.field})`);
+      });
+      warnings.push(...validation.errors.map(e => e.message));
+    }
+
     // Step 5: Generate ICS files
     let icsContent: string | undefined;
     let individualICS: Map<string, string> | undefined;
-    
+
     if (validation.validatedEvents.length > 0) {
       console.log(`Generating ICS files for ${validation.validatedEvents.length} events`);
-      
+
       try {
         // Generate combined ICS
         console.log('Generating combined ICS file...');
         icsContent = generateICS(validation.validatedEvents, config.ics);
         console.log('Combined ICS generated successfully');
-        
+
         // Generate individual ICS files if requested
         if (config.ics?.method === 'REQUEST') {
           console.log('Generating individual ICS files...');
@@ -169,9 +198,9 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
     } else {
       console.log('No valid events to generate ICS for');
     }
-    
+
     const processingTime = Date.now() - startTime;
-    
+
     return {
       events: validation.validatedEvents,
       icsContent,
@@ -188,7 +217,7 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
     if (error instanceof ScraperError) {
       throw error;
     }
-    
+
     throw new ScraperError(
       `Scraping failed: ${error}`,
       ErrorCode.INTERNAL_ERROR,
@@ -207,34 +236,35 @@ async function extractEventsFromContent(
   processing: ProcessingOptions
 ): Promise<CalendarEvent[]> {
   const allEvents: CalendarEvent[] = [];
-  
+
+  // FIXME: This is adding a nonsensical event w/ entire JSON
   // First, add any structured data events
-  if (processedContent.structuredData.length > 0) {
-    console.log(`Found ${processedContent.structuredData.length} events from structured data`);
-    
-    for (const structured of processedContent.structuredData) {
-      if (structured.title && structured.datetime) {
-        try {
-          const event: CalendarEvent = {
-            title: structured.title,
-            startTime: new Date(structured.datetime),
-            endTime: new Date(structured.datetime),
-            location: structured.location || 'TBD',
-            description: structured.description || '',
-            timezone: processing.timezone.default
-          };
-          
-          // Add 2 hours to end time if not specified
-          event.endTime.setHours(event.endTime.getHours() + 2);
-          
-          allEvents.push(event);
-        } catch (error) {
-          console.error('Failed to parse structured event:', error);
-        }
-      }
-    }
-  }
-  
+  // if (processedContent.structuredData.length > 0) {
+  //   console.log(`Found ${processedContent.structuredData.length} events from structured data`);
+
+  //   for (const structured of processedContent.structuredData) {
+  //     if (structured.title && structured.datetime) {
+  //       try {
+  //         const event: CalendarEvent = {
+  //           title: structured.title,
+  //           startTime: new Date(structured.datetime),
+  //           endTime: new Date(structured.datetime),
+  //           location: structured.location || 'TBD',
+  //           description: structured.description || '',
+  //           timezone: processing.timezone.default
+  //         };
+
+  //         // Add 2 hours to end time if not specified
+  //         event.endTime.setHours(event.endTime.getHours() + 2);
+
+  //         allEvents.push(event);
+  //       } catch (error) {
+  //         console.error('Failed to parse structured event:', error);
+  //       }
+  //     }
+  //   }
+  // }
+
   // Then, use AI for remaining content
   if (processedContent.chunks.length > 0) {
     const context: ExtractionContext = {
@@ -243,28 +273,28 @@ async function extractEventsFromContent(
       currentDate: new Date(),
       language: processedContent.metadata.language
     };
-    
+
     // Extract from high-priority chunks
     const highPriorityChunks = processedContent.chunks
       .filter((c: any) => c.priority >= 5)
       .map((c: any) => c.content);
-    
+
     if (highPriorityChunks.length > 0) {
       console.log(`Processing ${highPriorityChunks.length} high-priority content chunks`);
-      
+
       const aiEvents = await batchExtractEvents(
         highPriorityChunks,
         context,
         { concurrency: processing.batchSize }
       );
-      
+
       allEvents.push(...aiEvents);
     }
   }
-  
+
   // Deduplicate events
   const uniqueEvents = deduplicateEvents(allEvents);
-  
+
   return uniqueEvents;
 }
 
@@ -274,16 +304,16 @@ async function extractEventsFromContent(
 function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
   const seen = new Set<string>();
   const unique: CalendarEvent[] = [];
-  
+
   for (const event of events) {
     const key = `${event.title.toLowerCase()}-${event.startTime.toISOString()}`;
-    
+
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(event);
     }
   }
-  
+
   return unique;
 }
 
@@ -294,7 +324,7 @@ export async function scrapeMultipleSources(
   configs: ScraperConfig[]
 ): Promise<Result<ScraperResult>[]> {
   const results: Result<ScraperResult>[] = [];
-  
+
   for (const config of configs) {
     try {
       const result = await scrapeEvents(config);
@@ -312,7 +342,7 @@ export async function scrapeMultipleSources(
       });
     }
   }
-  
+
   return results;
 }
 
@@ -327,19 +357,19 @@ export async function monitoredScrape(
     console.log(msg);
     onProgress?.(msg);
   };
-  
+
   notify('Starting scrape operation');
-  
+
   try {
     notify(`Fetching ${config.source.url}`);
     const result = await scrapeEvents(config);
-    
+
     notify(`Successfully extracted ${result.events.length} events`);
-    
+
     if (result.metadata.warnings.length > 0) {
       notify(`Warnings: ${result.metadata.warnings.join(', ')}`);
     }
-    
+
     return result;
   } catch (error) {
     notify(`Error: ${error}`);
@@ -352,7 +382,7 @@ export async function monitoredScrape(
  */
 export function validateConfig(config: ScraperConfig): string[] {
   const errors: string[] = [];
-  
+
   // Validate source
   if (!config.source.url) {
     errors.push('Source URL is required');
@@ -363,18 +393,18 @@ export function validateConfig(config: ScraperConfig): string[] {
       errors.push('Invalid source URL');
     }
   }
-  
+
   // Validate processing options
   if (config.processing) {
     if (!config.processing.ai?.apiKey && !process.env.ANTHROPIC_API_KEY) {
       errors.push('Anthropic API key is required');
     }
-    
+
     if (config.processing.batchSize && config.processing.batchSize < 1) {
       errors.push('Batch size must be at least 1');
     }
   }
-  
+
   return errors;
 }
 

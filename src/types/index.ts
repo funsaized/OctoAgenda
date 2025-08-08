@@ -279,6 +279,9 @@ export interface AIConfiguration {
   
   /** System prompt override */
   systemPrompt?: string;
+  
+  /** Maximum number of continuation attempts */
+  maxContinuations?: number;
 }
 
 /**
