@@ -153,13 +153,13 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
         console.log(`  ${idx + 1}. \"${event.title}\" - ${event.startTime.toISOString()}`);
       });
     }
-    
+
     const validation = validateExtraction(events);
     console.log(`Validation result: ${validation.valid ? 'VALID' : 'INVALID'}`);
     console.log(`Valid events: ${validation.validatedEvents.length}`);
     console.log(`Invalid events: ${validation.invalidEvents.length}`);
     console.log(`Validation errors: ${validation.errors.length}`);
-    
+
     if (!validation.valid) {
       console.log('Validation errors:');
       validation.errors.forEach((error, idx) => {
@@ -410,6 +410,7 @@ export function validateConfig(config: ScraperConfig): string[] {
 
 /**
  * Create scraper config from environment variables
+ * (used on CRON)
  */
 export function createConfigFromEnv(): ScraperConfig {
   return {

@@ -7,24 +7,23 @@
 export { fetchHTML, clearCache, isURLAccessible } from './services/html-fetcher.js';
 export { preprocessHTML, extractStructuredData, hasEventContent } from './services/content-preprocessor.js';
 export { extractEvents, validateExtraction, batchExtractEvents } from './services/anthropic-ai.js';
-export { 
-  detectTimezone, 
-  convertToTimezone, 
+export {
+  detectTimezone,
+  convertToTimezone,
   normalizeToET,
   validateEventTimes,
   isValidTimezone,
   parseDateWithTimezone
 } from './services/timezone-intelligence.js';
-export { 
-  generateICS, 
-  generateSingleEventICS, 
+export {
+  generateICS,
+  generateSingleEventICS,
   validateICS,
   getICSHeaders
 } from './services/ics-generator.js';
-export { 
-  scrapeEvents, 
+export {
+  scrapeEvents,
   createConfigFromEnv,
-  validateConfig,
   scrapeMultipleSources
 } from './services/scraper-orchestrator.js';
 
@@ -41,6 +40,11 @@ export {
   debounce,
   lazy
 } from './utils/performance.js';
+
+// Config utilities
+export {
+  validateConfig
+} from './utils/config.js'
 
 // Type definitions
 export type {

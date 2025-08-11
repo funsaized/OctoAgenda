@@ -6,11 +6,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   scrapeEvents,
-  createConfigFromEnv,
-  validateConfig
+  createConfigFromEnv
 } from '../src/services/scraper-orchestrator.js';
 import { initializeAnthropic } from '../src/services/anthropic-ai.js';
 import { initializeCache } from '../src/services/html-fetcher.js';
+import { validateConfig } from '../src/utils/config.js';
 
 /**
  * Webhook notification interface

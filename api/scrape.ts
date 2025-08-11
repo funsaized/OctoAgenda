@@ -6,13 +6,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   scrapeEvents,
-  validateConfig,
   ScraperConfig
 } from '../src/services/scraper-orchestrator.js';
 import { initializeAnthropic } from '../src/services/anthropic-ai.js';
 import { initializeCache } from '../src/services/html-fetcher.js';
 import { getICSHeaders } from '../src/services/ics-generator.js';
 import { ScraperError, ErrorCode } from '../src/types/index.js';
+import { validateConfig } from '../src/utils/config.js';
 
 /**
  * Initialize services
@@ -47,6 +47,7 @@ export default async function handler(
   // Initialize services
   initializeServices();
 
+  // TODO: Security review before deployment
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -159,7 +160,7 @@ async function getConfig(req: VercelRequest): Promise<ScraperConfig> {
     source: {
       url: url as string,
       userAgent: (req.query.userAgent || req.body?.userAgent || process.env.SOURCE_USER_AGENT) as string,
-      selectors: req.body?.selectors,
+      selectors: req.body?.selectors, // TODO: is this used?
       headers: req.body?.headers,
       timeout: req.body?.timeout ? parseInt(req.body.timeout as string, 10) : undefined
     },
