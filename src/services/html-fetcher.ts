@@ -5,12 +5,12 @@
 
 import fetch, { Response } from 'node-fetch';
 import pRetry from 'p-retry';
-import { 
-  FetchOptions, 
-  ScraperError, 
-  ErrorCode, 
+import {
+  FetchOptions,
+  ScraperError,
+  ErrorCode,
   Result,
-  CacheConfiguration 
+  CacheConfiguration
 } from '../types/index.js';
 
 // Simple in-memory cache implementation
@@ -117,7 +117,7 @@ function isRetryableError(error: any): boolean {
   }
 
   // Network errors are generally retryable
-  if (error.code === 'ECONNREFUSED' || 
+  if (error.code === 'ECONNREFUSED' ||
       error.code === 'ENOTFOUND' ||
       error.code === 'ETIMEDOUT' ||
       error.code === 'ECONNRESET') {
@@ -137,11 +137,11 @@ function isRetryableError(error: any): boolean {
  */
 function createCacheKey(url: string, options?: FetchOptions): string {
   const parts = [url];
-  
+
   if (options?.headers) {
     parts.push(JSON.stringify(options.headers));
   }
-  
+
   if (options?.userAgent) {
     parts.push(options.userAgent);
   }
@@ -199,11 +199,11 @@ async function validateResponse(response: Response, url: string): Promise<void> 
  * Fetch HTML with a single attempt (used by retry logic)
  */
 async function fetchHTMLAttempt(
-  url: string, 
+  url: string,
   options?: FetchOptions
 ): Promise<string> {
   const timeout = options?.timeout || 30000;
-  const userAgent = options?.userAgent || 
+  const userAgent = options?.userAgent ||
     'Mozilla/5.0 (compatible; ICS-Scraper/1.0; +https://github.com/yourusername/ics-scraper)';
 
   const headers: Record<string, string> = {
@@ -281,7 +281,7 @@ async function fetchHTMLAttempt(
  * Main function to fetch HTML with retry logic and caching
  */
 export async function fetchHTML(
-  url: string, 
+  url: string,
   options?: FetchOptions
 ): Promise<string> {
   // Validate URL
@@ -299,7 +299,7 @@ export async function fetchHTML(
   // Check cache first
   const cache = getCache();
   const cacheKey = options?.cacheKey || createCacheKey(url, options);
-  
+
   if (options?.useCache !== false) {
     const cachedContent = cache.get(cacheKey);
     if (cachedContent) {
@@ -316,6 +316,8 @@ export async function fetchHTML(
     minTimeout: options?.retry?.initialDelay || 1000,
     maxTimeout: options?.retry?.maxDelay || 30000,
     factor: options?.retry?.backoffMultiplier || 2,
+    // TODO: onFailedAttempd/shouldRetry doing anything?
+    // https://github.com/tim-kos/node-retry#retryoperationoptions
     onFailedAttempt: (error: any) => {
       console.log(
         `Attempt ${error.attemptNumber} failed for ${url}. ` +
@@ -360,7 +362,7 @@ export async function fetchMultipleHTML(
 ): Promise<Result<string>[]> {
   const concurrency = options?.concurrency || 3;
   const results: Result<string>[] = [];
-  
+
   // Process URLs in batches
   for (let i = 0; i < urls.length; i += concurrency) {
     const batch = urls.slice(i, i + concurrency);
@@ -369,9 +371,9 @@ export async function fetchMultipleHTML(
         const html = await fetchHTML(url, options);
         return { success: true as const, data: html };
       } catch (error) {
-        return { 
-          success: false as const, 
-          error: error instanceof ScraperError ? error : 
+        return {
+          success: false as const,
+          error: error instanceof ScraperError ? error :
             new ScraperError(
               `Unknown error: ${error}`,
               ErrorCode.INTERNAL_ERROR,
@@ -381,16 +383,16 @@ export async function fetchMultipleHTML(
         };
       }
     });
-    
+
     const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults);
-    
+
     // Add delay between batches to avoid rate limiting
     if (i + concurrency < urls.length) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
-  
+
   return results;
 }
 
@@ -402,14 +404,14 @@ export async function isURLAccessible(
   options?: FetchOptions
 ): Promise<boolean> {
   try {
-    await fetchHTML(url, { 
-      ...options, 
-      retry: { 
+    await fetchHTML(url, {
+      ...options,
+      retry: {
         maxAttempts: 1,
         initialDelay: 0,
         maxDelay: 0,
-        backoffMultiplier: 1 
-      } 
+        backoffMultiplier: 1
+      }
     });
     return true;
   } catch {

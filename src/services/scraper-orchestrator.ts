@@ -87,7 +87,7 @@ const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
   ai: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     model: 'claude-3-haiku-20240307',
-    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '20', 10)
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
   }
 };
 
@@ -119,8 +119,9 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
     }
 
     // Step 2: Preprocess HTML
-    console.log('Preprocessing HTML content');
+    console.log('Starting preprocess HTML content');
     const processedContent = preprocessHTML(html);
+    console.log('Preprocessed HTML content', JSON.stringify(processedContent, null, 2));
 
     if (!hasEventContent(processedContent)) {
       warnings.push('No event content detected in HTML');
@@ -128,7 +129,7 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
 
     // Step 3: Extract events using AI
     console.log('\n=== AI EXTRACTION STEP ===');
-    console.log('Extracting events with AI');
+    console.log('Starting extracting events with AI');
     let events: CalendarEvent[] = [];
     try {
       events = await extractEventsFromContent(
@@ -196,7 +197,7 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
         throw icsError;
       }
     } else {
-      console.log('No valid events to generate ICS for');
+      console.warn('No valid events to generate ICS for');
     }
 
     const processingTime = Date.now() - startTime;
