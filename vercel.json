@@ -1,10 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "turbo run build",
+  "buildCommand": "turbo run build --filter=@repo/web",
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install",
-  "framework": null,
+  "framework": "nextjs",
   "functions": {
     "apps/api/api/scrape.ts": {
       "maxDuration": 300,
