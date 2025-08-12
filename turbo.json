@@ -1,18 +1,57 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "NODE_ENV"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "DEBUG",
+        "SOURCE_URL",
+        "SOURCE_USER_AGENT",
+        "BATCH_SIZE",
+        "RETRY_ATTEMPTS",
+        "CACHE_TTL",
+        "DEBUG_MODE",
+        "DEFAULT_TIMEZONE",
+        "DETECT_TIMEZONE",
+        "ANTHROPIC_API_KEY"
+      ]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": [
+        "DEBUG",
+        "SOURCE_URL",
+        "SOURCE_USER_AGENT",
+        "BATCH_SIZE",
+        "RETRY_ATTEMPTS",
+        "CACHE_TTL",
+        "DEBUG_MODE",
+        "DEFAULT_TIMEZONE",
+        "DETECT_TIMEZONE",
+        "ANTHROPIC_API_KEY"
+      ]
     },
     "dev:local": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": [
+        "DEBUG",
+        "SOURCE_URL",
+        "SOURCE_USER_AGENT",
+        "BATCH_SIZE",
+        "RETRY_ATTEMPTS",
+        "CACHE_TTL",
+        "DEBUG_MODE",
+        "DEFAULT_TIMEZONE",
+        "DETECT_TIMEZONE",
+        "ANTHROPIC_API_KEY"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
