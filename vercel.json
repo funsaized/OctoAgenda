@@ -15,10 +15,6 @@
       "schedule": "0 4 * * 3"
     }
   ],
-  "env": {
-    "NODE_ENV": "production",
-    "TZ": "UTC"
-  },
   "headers": [
     {
       "source": "/api/(.*)",
