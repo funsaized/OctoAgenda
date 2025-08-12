@@ -8,32 +8,31 @@ import {
   scrapeEvents,
   ScraperConfig
 } from '../src/services/scraper-orchestrator.js';
-import { initializeAnthropic } from '../src/services/anthropic-ai.js';
+import { createAnthropicClient } from '../src/services/anthropic-ai.js';
+import type { Anthropic } from '@anthropic-ai/sdk';
 import { initializeCache } from '../src/services/html-fetcher.js';
 import { getICSHeaders } from '../src/services/ics-generator.js';
 import { ScraperError, ErrorCode } from '../src/types/index.js';
 import { validateConfig } from '../src/utils/config.js';
 
 /**
- * Initialize services
+ * Create Anthropic client for this handler invocation
  */
-function initializeServices(): void {
-  // Initialize AI client
+function createClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) {
-    initializeAnthropic({
-      apiKey,
-      model: 'claude-3-haiku-20240307',
-      maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
-    });
+  if (!apiKey) {
+    throw new ScraperError(
+      'ANTHROPIC_API_KEY environment variable is not configured',
+      ErrorCode.CONFIGURATION_ERROR,
+      { message: 'AI service configuration is required for event extraction' },
+      false
+    );
   }
-
-  // Initialize cache
-  initializeCache({
-    enabled: process.env.CACHE_ENABLED !== 'false',
-    ttl: parseInt(process.env.CACHE_TTL || '3600', 10),
-    maxSize: 100,
-    storage: 'memory'
+  
+  return createAnthropicClient({
+    apiKey,
+    model: 'claude-3-haiku-20240307',
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
   });
 }
 
@@ -44,8 +43,13 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  // Initialize services
-  initializeServices();
+  // Initialize cache
+  initializeCache({
+    enabled: process.env.CACHE_ENABLED !== 'false',
+    ttl: parseInt(process.env.CACHE_TTL || '3600', 10),
+    maxSize: 100,
+    storage: 'memory'
+  });
 
   // TODO: Security review before deployment
   // Set CORS headers
@@ -69,6 +73,9 @@ export default async function handler(
   }
 
   try {
+    // Create Anthropic client for this invocation
+    const anthropicClient = createClient();
+    
     // Get configuration
     const config = await getConfig(req);
 
@@ -85,8 +92,8 @@ export default async function handler(
     // Log the scraping request
     console.log(`Scraping ${config.source.url}`);
 
-    // Perform scraping
-    const result = await scrapeEvents(config);
+    // Perform scraping with client
+    const result = await scrapeEvents(config, anthropicClient);
 
     // Check output format
     const format = req.query.format || req.body?.format || 'json';

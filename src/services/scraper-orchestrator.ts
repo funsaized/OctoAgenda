@@ -15,6 +15,7 @@ import {
 import { fetchHTML } from './html-fetcher.js';
 import { preprocessHTML, hasEventContent } from './content-preprocessor.js';
 import { validateExtraction, batchExtractEvents, ExtractionContext } from './anthropic-ai.js';
+import type { Anthropic } from '@anthropic-ai/sdk';
 import { generateICS, generateSingleEventICS } from './ics-generator.js';
 
 /**
@@ -94,7 +95,7 @@ const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
 /**
  * Main scraper function
  */
-export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult> {
+export async function scrapeEvents(config: ScraperConfig, anthropicClient: Anthropic): Promise<ScraperResult> {
   const startTime = Date.now();
   const warnings: string[] = [];
   const processing = { ...DEFAULT_PROCESSING_OPTIONS, ...config.processing };
@@ -135,7 +136,8 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
       events = await extractEventsFromContent(
         processedContent,
         config.source,
-        processing
+        processing,
+        anthropicClient
       );
       console.log(`AI extraction successful: ${events.length} events extracted`);
     } catch (extractionError: any) {
@@ -234,7 +236,8 @@ export async function scrapeEvents(config: ScraperConfig): Promise<ScraperResult
 async function extractEventsFromContent(
   processedContent: any,
   source: SourceConfiguration,
-  processing: ProcessingOptions
+  processing: ProcessingOptions,
+  client: Anthropic
 ): Promise<CalendarEvent[]> {
   const allEvents: CalendarEvent[] = [];
 
@@ -284,8 +287,10 @@ async function extractEventsFromContent(
       console.log(`Processing ${highPriorityChunks.length} high-priority content chunks`);
 
       const aiEvents = await batchExtractEvents(
+        client,
         highPriorityChunks,
         context,
+        processing.ai,
         { concurrency: processing.batchSize }
       );
 
@@ -322,13 +327,14 @@ function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
  * Scrape multiple sources
  */
 export async function scrapeMultipleSources(
-  configs: ScraperConfig[]
+  configs: ScraperConfig[],
+  anthropicClient: Anthropic
 ): Promise<Result<ScraperResult>[]> {
   const results: Result<ScraperResult>[] = [];
 
   for (const config of configs) {
     try {
-      const result = await scrapeEvents(config);
+      const result = await scrapeEvents(config, anthropicClient);
       results.push({ success: true, data: result });
     } catch (error) {
       results.push({
@@ -352,7 +358,8 @@ export async function scrapeMultipleSources(
  */
 export async function monitoredScrape(
   config: ScraperConfig,
-  onProgress?: (message: string) => void
+  onProgress: ((message: string) => void) | undefined,
+  anthropicClient: Anthropic
 ): Promise<ScraperResult> {
   const notify = (msg: string) => {
     console.log(msg);
@@ -363,7 +370,7 @@ export async function monitoredScrape(
 
   try {
     notify(`Fetching ${config.source.url}`);
-    const result = await scrapeEvents(config);
+    const result = await scrapeEvents(config, anthropicClient);
 
     notify(`Successfully extracted ${result.events.length} events`);
 

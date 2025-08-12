@@ -6,7 +6,7 @@
 // Core services
 export { fetchHTML, clearCache, isURLAccessible } from './services/html-fetcher.js';
 export { preprocessHTML, extractStructuredData, hasEventContent } from './services/content-preprocessor.js';
-export { extractEvents, validateExtraction, batchExtractEvents } from './services/anthropic-ai.js';
+export { createAnthropicClient, extractEvents, validateExtraction, batchExtractEvents } from './services/anthropic-ai.js';
 export {
   detectTimezone,
   convertToTimezone,

@@ -103,56 +103,24 @@ Important guidelines:
 - Be conservative - only extract clear event information`;
 
 /**
- * Anthropic client instance
+ * Create Anthropic client
+ * This should be called once per handler and the client passed to functions
  */
-let anthropicClient: Anthropic | null = null;
-
-/**
- * Current AI configuration
- */
-let currentConfig: AIConfiguration | null = null;
-
-/**
- * Initialize Anthropic client
- */
-export function initializeAnthropic(config: AIConfiguration): void {
-  anthropicClient = new Anthropic({
+export function createAnthropicClient(config: AIConfiguration): Anthropic {
+  return new Anthropic({
     apiKey: config.apiKey,
   });
-  currentConfig = config;
-}
-
-/**
- * Get or create Anthropic client
- */
-function getClient(): Anthropic {
-  if (!anthropicClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new ScraperError(
-        'Anthropic API key not configured',
-        ErrorCode.CONFIGURATION_ERROR,
-        { message: 'ANTHROPIC_API_KEY environment variable not set' },
-        false
-      );
-    }
-    initializeAnthropic({
-      apiKey,
-      model: 'claude-3-haiku-20240307',
-      maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
-    });
-  }
-  return anthropicClient!;
 }
 
 /**
  * Extract events from content using Claude AI
  */
 export async function extractEvents(
+  client: Anthropic,
   content: string,
-  context?: ExtractionContext
+  context?: ExtractionContext,
+  config?: AIConfiguration
 ): Promise<CalendarEvent[]> {
-  const client = getClient();
 
   // Build the user prompt
   const userPrompt = buildUserPrompt(content, context);
@@ -168,7 +136,7 @@ export async function extractEvents(
     ];
 
     let continuationCount = 0;
-    const maxContinuations = currentConfig?.maxContinuations ?? 10;
+    const maxContinuations = config?.maxContinuations ?? 10;
 
     while (continuationCount < maxContinuations) {
       const response = await client.messages.create({
@@ -823,8 +791,10 @@ export function validateExtraction(events: any[]): ValidationResult {
  * Batch process multiple content chunks
  */
 export async function batchExtractEvents(
+  client: Anthropic,
   contentChunks: string[],
   context?: ExtractionContext,
+  config?: AIConfiguration,
   options?: { concurrency?: number }
 ): Promise<CalendarEvent[]> {
   const concurrency = options?.concurrency || 3;
@@ -834,7 +804,7 @@ export async function batchExtractEvents(
   for (let i = 0; i < contentChunks.length; i += concurrency) {
     const batch = contentChunks.slice(i, i + concurrency);
     const batchPromises = batch.map(chunk =>
-      extractEvents(chunk, context).catch(err => {
+      extractEvents(client, chunk, context, config).catch(err => {
         console.error(`Failed to extract from chunk: ${err}`);
         return [];
       })

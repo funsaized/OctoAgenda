@@ -8,7 +8,8 @@ import {
   scrapeEvents,
   createConfigFromEnv
 } from '../src/services/scraper-orchestrator.js';
-import { initializeAnthropic } from '../src/services/anthropic-ai.js';
+import { createAnthropicClient } from '../src/services/anthropic-ai.js';
+import type { Anthropic } from '@anthropic-ai/sdk';
 import { initializeCache } from '../src/services/html-fetcher.js';
 import { validateConfig } from '../src/utils/config.js';
 
@@ -51,25 +52,18 @@ async function sendWebhookNotification(notification: WebhookNotification): Promi
 }
 
 /**
- * Initialize services
+ * Create Anthropic client for this handler invocation
  */
-function initializeServices(): void {
-  // Initialize AI client
+function createClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) {
-    initializeAnthropic({
-      apiKey,
-      model: 'claude-3-haiku-20240307',
-      maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
-    });
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY environment variable is not configured');
   }
-
-  // Initialize cache
-  initializeCache({
-    enabled: true,
-    ttl: 3600,
-    maxSize: 100,
-    storage: 'memory'
+  
+  return createAnthropicClient({
+    apiKey,
+    model: 'claude-3-haiku-20240307',
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
   });
 }
 
@@ -87,13 +81,20 @@ export default async function handler(
     return;
   }
 
-  // Initialize services
-  initializeServices();
+  // Initialize cache
+  initializeCache({
+    enabled: true,
+    ttl: 3600,
+    maxSize: 100,
+    storage: 'memory'
+  });
 
   const startTime = Date.now();
   console.log('Starting scheduled scraping job');
 
   try {
+    // Create Anthropic client for this invocation
+    const anthropicClient = createClient();
     // Get configuration from environment
     const config = createConfigFromEnv();
 
@@ -103,8 +104,8 @@ export default async function handler(
       throw new Error(`Invalid configuration: ${errors.join(', ')}`);
     }
 
-    // Perform scraping
-    const result = await scrapeEvents(config);
+    // Perform scraping with client
+    const result = await scrapeEvents(config, anthropicClient);
 
     // Log results
     console.log(`Scraping completed: ${result.events.length} events found`);
