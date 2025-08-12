@@ -1,0 +1,109 @@
+# ==============================================================================
+# NODE.JS API GITIGNORE
+# ==============================================================================
+# This file contains patterns specific to the Node.js API application
+# Additional patterns are inherited from the root .gitignore
+
+# ==============================================================================
+# VERCEL DEPLOYMENT
+# ==============================================================================
+.vercel
+.vercel.json
+
+# ==============================================================================
+# NODE.JS API SPECIFIC
+# ==============================================================================
+# Compiled TypeScript
+/dist/
+/lib/
+/build/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# ==============================================================================
+# SERVERLESS & FUNCTION ARTIFACTS
+# ==============================================================================
+# Vercel function build cache
+.vercel/output/
+.vercel/cache/
+
+# Lambda function packages
+*.zip
+
+# Serverless framework
+.serverless/
+
+# ==============================================================================
+# DEVELOPMENT & TESTING
+# ==============================================================================
+# Environment files (API-specific)
+.env*
+!.env.example
+!.env.template
+
+# Test coverage
+/coverage/
+/nyc_output/
+
+# Test artifacts
+/test-results/
+/tests_output/
+
+# ==============================================================================
+# DEPENDENCIES (API-specific)
+# ==============================================================================
+# Already handled by root, but keeping for clarity
+/node_modules
+
+# ==============================================================================
+# RUNTIME & LOGS
+# ==============================================================================
+# Runtime files
+/tmp/
+/temp/
+
+# API logs
+/logs/
+api.log
+*.log
+
+# Process files
+*.pid
+
+# ==============================================================================
+# API DOCUMENTATION
+# ==============================================================================
+# Generated API docs
+/docs/build/
+/api-docs/
+
+# ==============================================================================
+# DATABASE & STORAGE
+# ==============================================================================
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Database dumps
+*.sql
+*.dump
+
+# ==============================================================================
+# CERTIFICATES & KEYS
+# ==============================================================================
+# SSL certificates (API-specific)
+/certs/
+*.pem
+*.key
+*.crt
+
+# ==============================================================================
+# BUILD & DEPLOYMENT ARTIFACTS
+# ==============================================================================
+# Bundle analysis
+/bundle-analyzer/
+
+# Deployment scripts output
+/scripts/output/
