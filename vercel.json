@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "monorepo": true,
   "buildCommand": "turbo run build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install",
