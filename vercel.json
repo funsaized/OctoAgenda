@@ -7,15 +7,19 @@
   "framework": null,
   "functions": {
     "apps/api/api/scrape.ts": {
+      "runtime": "nodejs20.x",
       "maxDuration": 300,
       "memory": 1024
     },
     "apps/api/api/cron.ts": {
+      "runtime": "nodejs20.x",
       "maxDuration": 300,
       "memory": 1024
     },
-    "apps/api/api/*.ts": {
-      "runtime": "nodejs20.x"
+    "apps/api/api/stream-scrape.ts": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 300,
+      "memory": 1024
     }
   },
   "crons": [
