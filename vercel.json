@@ -6,15 +6,7 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "functions": {
-    "apps/api/api/scrape.ts": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "apps/api/api/cron.ts": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "apps/api/api/stream-scrape.ts": {
+    "apps/api/api/*.ts": {
       "maxDuration": 300,
       "memory": 1024
     }
