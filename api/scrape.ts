@@ -4,6 +4,9 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+// Allow longer execution time to prevent timeout (5 minutes)
+export const maxDuration = 300;
 import {
   scrapeEvents,
   ScraperConfig

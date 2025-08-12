@@ -4,6 +4,9 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+// Allow longer execution time for cron jobs (10 minutes)
+export const maxDuration = 600;
 import {
   scrapeEvents,
   createConfigFromEnv

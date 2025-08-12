@@ -1,11 +1,11 @@
 {
   "functions": {
     "api/scrape.ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     },
     "api/cron.ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     }
   },
