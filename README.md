@@ -1,6 +1,6 @@
-# ICS Scraper
+# OctoAgenda - AI Powered Event Scraper -> iCal
 
-A Next.js application that scrapes event data from web pages and generates ICS calendar files using AI-powered content extraction.
+A tool that scrapes event data from web pages and generates ICS calendar files using intelligent content extraction.
 
 ## Features
 
