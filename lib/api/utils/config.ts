@@ -7,7 +7,7 @@ export function validateConfig(body: unknown): ScraperConfig {
 
   // Type guard and validate body structure
   const requestBody = body as Record<string, unknown>;
-  
+
   // Validate URL
   if (!requestBody.url || typeof requestBody.url !== 'string') {
     throw new Error('URL is required and must be a string');
@@ -43,7 +43,7 @@ export function validateConfig(body: unknown): ScraperConfig {
     ics: {
       calendarName: (requestBody.calendarName as string) || 'Scraped Events',
       timezone: (requestBody.timezone as string) || process.env.DEFAULT_TIMEZONE || 'America/New_York',
-      detectTimezone: requestBody.detectTimezone !== false && (process.env.DETECT_TIMEZONE !== 'false')
+      // detectTimezone: requestBody.detectTimezone !== false && (process.env.DETECT_TIMEZONE !== 'false')
     }
   };
 
@@ -52,11 +52,11 @@ export function validateConfig(body: unknown): ScraperConfig {
     throw new Error('ANTHROPIC_API_KEY environment variable is required');
   }
 
-  if (config.processing.batchSize && config.processing.batchSize < 1) {
+  if (config.processing?.batchSize && config.processing.batchSize < 1) {
     throw new Error('Batch size must be at least 1');
   }
 
-  if (config.processing.retry.maxAttempts && config.processing.retry.maxAttempts < 0) {
+  if (config?.processing?.retry?.maxAttempts && config.processing.retry.maxAttempts < 0) {
     throw new Error('Retry attempts cannot be negative');
   }
 
