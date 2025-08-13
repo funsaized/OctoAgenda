@@ -78,12 +78,13 @@ export function getDefaultConfig(): Partial<ScraperConfig> {
       },
       ai: {
         model: 'claude-3-haiku-20240307',
-        maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
+        maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
+        apiKey: process.env.ANTHROPIC_API_KEY || '',
       }
     },
     ics: {
       timezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
-      detectTimezone: process.env.DETECT_TIMEZONE !== 'false'
+      // detectTimezone: process.env.DETECT_TIMEZONE !== 'false'
     }
   };
 }
