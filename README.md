@@ -1,253 +1,118 @@
-# ICS Event Scraper Monorepo
+# ICS Scraper
 
-A Turborepo-powered monorepo containing a Next.js frontend and Vercel serverless functions for AI-powered event extraction and ICS calendar generation.
-
-## What's Inside
-
-This Turborepo includes the following packages/apps:
-
-### Apps
-
-- `@repo/web`: A [Next.js](https://nextjs.org/) app (frontend)
-- `@repo/api`: Vercel serverless functions for event scraping and ICS generation
-
-### Packages
-
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-- `@repo/eslint-config`: ESLint configurations
+A Next.js application that scrapes event data from web pages and generates ICS calendar files using AI-powered content extraction.
 
 ## Features
 
-### API Features (@repo/api)
-- 🤖 **AI-Powered Extraction**: Uses Anthropic's Claude Haiku model with intelligent continuation handling
-- 🔄 **Partial Response Recovery**: Advanced partial-JSON parsing handles truncated AI responses
-- 🛡️ **Robust Error Recovery**: Preserves successfully extracted events even during connection errors
-- 🌐 **Smart Web Scraping**: Handles static and dynamic content with retry logic and caching
-- 🕐 **Timezone Intelligence**: Automatic timezone detection and conversion with DST awareness
-- 📅 **ICS Generation**: RFC-compliant calendar file generation with recurring event support
-- ⚡ **Serverless Architecture**: Runs on Vercel with automatic scaling
-- 🔄 **Scheduled Execution**: Automated daily scraping via cron jobs
-- 📊 **Performance Monitoring**: Built-in metrics, caching, and circuit breakers
+- 🤖 **AI-Powered Extraction**: Uses Claude AI to intelligently extract event information from web pages
+- 📅 **ICS Calendar Generation**: Automatically generates standard ICS calendar files
+- ⚡ **Edge Runtime**: Optimized for fast execution with Vercel Edge Functions
+- 🔄 **Streaming API**: Real-time progress updates via Server-Sent Events
+- ⏰ **Scheduled Jobs**: Automated scraping with cron jobs
+- 🌍 **Timezone Support**: Intelligent timezone detection and conversion
+- 🔒 **Security Headers**: Built-in security with proper CORS and headers
 
-### Frontend Features (@repo/web)
-- ⚡ **Next.js 15**: Latest Next.js with App Router
-- 🎨 **Tailwind CSS**: Utility-first CSS framework
-- 📝 **TypeScript**: Full type safety
-- 🔍 **ESLint**: Code quality and consistency
+## API Endpoints
 
-## Quick Start
+### POST `/api/scrape`
+Scrape events from a URL and generate ICS file.
 
-### Prerequisites
-
-- Node.js >= 20.0.0
-- npm >= 10.0.0
-
-### Installation
-
-```bash
-# Install dependencies
-npm install
+**Request:**
+```json
+{
+  "url": "https://example.com/events",
+  "batchSize": 50,
+  "retryAttempts": 3,
+  "timezone": "America/New_York",
+  "calendarName": "My Events"
+}
 ```
 
-### Configuration
+**Response:** JSON with events and ICS content or direct ICS file download.
 
-#### API Configuration
-Create `.env` file in the root directory:
+### POST `/api/stream-scrape`
+Streaming version with real-time progress updates.
 
-```bash
-# Required for API
-ANTHROPIC_API_KEY=your_anthropic_api_key
-SOURCE_URL=https://example.com/events
+**Response:** Server-Sent Events stream with progress updates.
 
-# Optional
-DEFAULT_TIMEZONE=America/New_York
-BATCH_SIZE=5
-MAX_CONTINUATIONS=20
-CACHE_TTL=3600
-RETRY_ATTEMPTS=3
-CALENDAR_ENDPOINT=
-MONITORING_WEBHOOK=
-```
+### GET `/api/cron`
+Scheduled endpoint for automated scraping (Vercel Cron).
 
-### Development
+## Environment Variables
 
-```bash
-# Run both frontend and API in development mode
-npm run dev
+### Required
+- `ANTHROPIC_API_KEY` - Your Anthropic API key for Claude AI
+- `SOURCE_URL` - Default URL to scrape (used by cron job)
 
-# Run specific app
-npm run dev --workspace=@repo/web
-npm run dev --workspace=@repo/api
-```
+### Optional
+- `CRON_SECRET` - Secret for cron job authentication
+- `BATCH_SIZE` - Number of events to process per batch (default: 50)
+- `RETRY_ATTEMPTS` - Number of retry attempts (default: 3)
+- `CACHE_TTL` - Cache time-to-live in milliseconds (default: 3600000)
+- `CACHE_MAX_SIZE` - Maximum cache size (default: 50)
+- `DEFAULT_TIMEZONE` - Default timezone (default: America/New_York)
+- `DETECT_TIMEZONE` - Enable timezone detection (default: true)
+- `MAX_CONTINUATIONS` - Max AI continuations (default: 10)
 
-### Build
+## Getting Started
 
-```bash
-# Build all apps and packages
-npm run build
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-# Build specific app
-npm run build --workspace=@repo/web
-npm run build --workspace=@repo/api
-```
+2. **Set up environment variables:**
+   ```bash
+   cp .env.example .env.local
+   # Add your ANTHROPIC_API_KEY and SOURCE_URL
+   ```
 
-### Testing
+3. **Run development server:**
+   ```bash
+   npm run dev
+   ```
 
-```bash
-# Run tests for all packages
-npm run test
+4. **Test the API:**
+   ```bash
+   curl -X POST http://localhost:3000/api/scrape \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://example.com/events"}'
+   ```
 
-# Run tests for specific package
-npm run test --workspace=@repo/api
-```
+## Deployment
 
-### Linting
+### Vercel (Recommended)
 
-```bash
-# Lint all packages
-npm run lint
+1. **Connect to Vercel and deploy:**
+   ```bash
+   git push origin main
+   ```
 
-# Type check all packages
-npm run type-check
-```
+2. **Set environment variables in Vercel dashboard**
+
+### Other Platforms
+
+Standard Next.js app - can be deployed anywhere Node.js is supported.
 
 ## Project Structure
 
 ```
-.
-├── apps/
-│   ├── api/                      # Vercel serverless functions
-│   │   ├── api/                  # API routes
-│   │   │   ├── scrape.ts        # Main scraping endpoint
-│   │   │   ├── stream-scrape.ts # Streaming endpoint
-│   │   │   └── cron.ts          # Scheduled execution
-│   │   ├── src/                  # Core logic
-│   │   │   ├── services/        # Business logic modules
-│   │   │   ├── types/           # TypeScript definitions
-│   │   │   └── utils/           # Utility functions
-│   │   ├── tests/               # Test suite
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   │
-│   └── web/                      # Next.js frontend
-│       ├── app/                  # App router pages
-│       ├── public/              # Static assets
-│       ├── package.json
-│       └── tsconfig.json
-│
-├── packages/
-│   ├── eslint-config/           # Shared ESLint configurations
-│   └── typescript-config/       # Shared TypeScript configurations
-│
-├── package.json                 # Root package.json
-├── turbo.json                   # Turborepo configuration
-└── README.md                    # This file
+├── app/
+│   ├── api/           # API routes
+│   ├── globals.css    # Global styles
+│   ├── layout.tsx     # Root layout
+│   └── page.tsx       # Home page
+├── lib/
+│   └── api/           # API logic
+│       ├── services/  # Core services
+│       ├── types/     # TypeScript types
+│       └── utils/     # Utility functions
+├── public/            # Static assets
+├── next.config.ts     # Next.js configuration
+├── vercel.json        # Vercel deployment config
+└── package.json       # Dependencies
 ```
-
-## API Endpoints
-
-### `/api/scrape`
-
-Extracts events from a web page and returns them as JSON or ICS.
-
-**Parameters:**
-- `url` (required): URL to scrape
-- `format`: Response format (`json` | `ics`)
-- `timezone`: Override timezone detection
-- `calendarName`: Name for generated calendar
-- `useCache`: Enable/disable caching (`true` | `false`)
-
-**Example:**
-```bash
-# Get events as JSON
-curl "https://your-deployment.vercel.app/api/scrape?url=https://example.com/events"
-
-# Download ICS file
-curl "https://your-deployment.vercel.app/api/scrape?url=https://example.com/events&format=ics"
-```
-
-### `/api/stream-scrape`
-
-Streaming version of the scrape endpoint for real-time event extraction.
-
-### `/api/cron`
-
-Scheduled endpoint for automated scraping (runs daily at 6 AM UTC).
-
-## Deployment
-
-### Deploy to Vercel
-
-```bash
-# Deploy all apps
-npm run deploy
-
-# Deploy production
-npm run deploy:prod
-```
-
-### Environment Variables on Vercel
-
-Set the following environment variables in your Vercel project settings:
-
-- `ANTHROPIC_API_KEY`: Your Anthropic API key
-- `SOURCE_URL`: Default URL to scrape (for cron jobs)
-- Other optional variables as needed
-
-## Turborepo Features
-
-### Remote Caching
-
-Turborepo can cache builds remotely. To enable:
-
-```bash
-npx turbo link
-```
-
-### Pipeline
-
-The build pipeline is configured in `turbo.json`:
-
-- `build`: Depends on upstream builds
-- `dev`: Runs in parallel with no caching
-- `lint`: Runs independently
-- `test`: Depends on builds
-- `type-check`: Runs independently
-
-## Development with Turborepo
-
-### Filtering
-
-Run tasks for specific packages:
-
-```bash
-# Run build for only the API
-npm run build -- --filter=@repo/api
-
-# Run dev for only the web app
-npm run dev -- --filter=@repo/web
-```
-
-### Parallel Execution
-
-Turborepo automatically runs tasks in parallel when possible, respecting dependency constraints.
-
-### Caching
-
-Build outputs are cached locally (and remotely if configured) to speed up subsequent builds.
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Support
-
-For issues, questions, or suggestions, please open an issue on GitHub.
+MIT License

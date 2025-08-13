@@ -1,38 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "buildCommand": "turbo run build --filter=@repo/web",
-  "outputDirectory": "apps/web/.next",
-  "installCommand": "npm install",
   "framework": "nextjs",
-  "functions": {
-    "apps/api/api/scrape.ts": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "apps/api/api/cron.ts": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "apps/api/api/stream-scrape.ts": {
-      "maxDuration": 300,
-      "memory": 1024
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/scrape",
-      "destination": "/apps/api/api/scrape"
-    },
-    {
-      "source": "/api/cron", 
-      "destination": "/apps/api/api/cron"
-    },
-    {
-      "source": "/api/stream-scrape",
-      "destination": "/apps/api/api/stream-scrape"
-    }
-  ],
   "crons": [
     {
       "path": "/api/cron",
