@@ -6,8 +6,7 @@ const nextConfig: NextConfig = {
     'cheerio', 
     'ical-generator',
     'node-fetch'
-  ],
-  output: 'standalone'
+  ]
 };
 
 export default nextConfig;
