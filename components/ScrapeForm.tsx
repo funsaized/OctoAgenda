@@ -235,6 +235,7 @@ function ScrapeForm() {
             className="d-flex align-items-center justify-content-center position-relative mx-auto mb-4"
             style={{ width: '120px', height: '120px' }}
           >
+            {/*FIXME: add back more wiggle when mouseover / click */}
             <Image
               className="d-block rounded-2 mascot-hover"
               style={{

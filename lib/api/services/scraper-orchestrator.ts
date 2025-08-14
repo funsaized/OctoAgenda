@@ -283,38 +283,6 @@ function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
 }
 
 /**
- * Scrape multiple sources
- */
-export async function scrapeMultipleSources(
-  configs: ScraperConfig[],
-  anthropicClient: Anthropic
-): Promise<Result<ScraperResult>[]> {
-  const results: Result<ScraperResult>[] = [];
-
-  for (const config of configs) {
-    try {
-      const result = await scrapeEvents(config, anthropicClient);
-      results.push({ success: true, data: result });
-    } catch (error) {
-      results.push({
-        success: false,
-        error:
-          error instanceof ScraperError
-            ? error
-            : new ScraperError(
-                `Unknown error: ${error}`,
-                ErrorCode.INTERNAL_ERROR,
-                { error },
-                false
-              ),
-      });
-    }
-  }
-
-  return results;
-}
-
-/**
  * Monitor scraping operation
  */
 export async function monitoredScrape(

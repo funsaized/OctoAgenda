@@ -698,13 +698,11 @@ function convertSingleEventToCalendarEvent(
  */
 function isResponseTruncated(responseText: string): boolean {
   // Look for signs of truncation in JSON
+  const unescapedQuotes = (responseText.match(/(?<!\\)"/g) || []).length;
   const signs = [
     !responseText.trim().endsWith('}'), // JSON doesn't end properly
-    responseText.includes('"tit'), // Cut off in the middle of "title"
-    responseText.includes('"start'), // Cut off in the middle of "startDateTime"
-    responseText.includes('"loc'), // Cut off in the middle of "location"
     /,\s*$/.test(responseText.trim()), // Ends with a comma
-    /"[^"]*$/.test(responseText.trim()), // Ends with an unclosed quote
+    unescapedQuotes % 2 !== 0, // Unbalanced quotes
   ];
 
   return signs.some((sign) => sign);
