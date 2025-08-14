@@ -14,6 +14,7 @@ function ScrapeForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState("")
+  const [processingUrl, setProcessingUrl] = useState("")
 
   const {
     register,
@@ -21,6 +22,7 @@ function ScrapeForm() {
     formState: { errors, isValid },
     reset,
     clearErrors,
+    watch,
   } = useForm<FormInputs>({
     mode: "onChange",
     defaultValues: {
@@ -33,6 +35,7 @@ function ScrapeForm() {
     setIsLoading(true)
     setSubmitSuccess(false)
     setSubmitError("")
+    setProcessingUrl(data.url)
     const form = data
 
     try {
@@ -57,7 +60,6 @@ function ScrapeForm() {
       }
 
       if (form.preferIcs) {
-        // Handle ICS file download
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
@@ -68,11 +70,9 @@ function ScrapeForm() {
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
       } else {
-        // Handle JSON response
         const responseData = await res.json()
         console.log("Events extracted:", responseData)
 
-        // If JSON response includes icsContent, create download from that
         if (responseData.icsContent) {
           const blob = new Blob([responseData.icsContent], { type: "text/calendar;charset=utf-8" })
           const url = window.URL.createObjectURL(blob)
@@ -86,11 +86,9 @@ function ScrapeForm() {
         }
       }
 
-      // Success handling
       setSubmitSuccess(true)
       reset()
 
-      // Clear success message after 5 seconds
       setTimeout(() => {
         setSubmitSuccess(false)
       }, 5000)
@@ -99,6 +97,7 @@ function ScrapeForm() {
       console.error("Submission error:", error)
     } finally {
       setIsLoading(false)
+      setProcessingUrl("")
     }
   }
 
@@ -187,6 +186,27 @@ function ScrapeForm() {
           </button>
         </form>
       </div>
+
+      {isLoading && processingUrl && (
+        <div className={styles.previewCard}>
+          <div className={styles.previewHeader}>
+            <h3 className={styles.previewTitle}>📖 Page Preview</h3>
+            <div className={styles.previewSubtitle}>🔍 Analyzing this page for calendar events...</div>
+          </div>
+          <div className={styles.iframeContainer}>
+            <iframe
+              src={processingUrl}
+              className={styles.previewIframe}
+              title="Website Preview"
+              sandbox="allow-same-origin allow-scripts"
+            />
+            <div className={styles.loadingOverlay}>
+              <div className={styles.loadingSpinner}></div>
+              <p>🤖 AI is scanning for events...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
