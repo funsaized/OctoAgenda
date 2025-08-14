@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { CalendarEvent } from '@/lib/api/types';
+import EventGrid from './EventGrid';
 
 type FormInputs = {
   url: string;
@@ -15,6 +17,7 @@ function ScrapeForm() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [processingUrl, setProcessingUrl] = useState('');
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   const {
     register,
@@ -34,6 +37,7 @@ function ScrapeForm() {
     setSubmitSuccess(false);
     setSubmitError('');
     setProcessingUrl(data.url);
+    setEvents([]); // Clear previous events
     const form = data;
 
     try {
@@ -70,6 +74,11 @@ function ScrapeForm() {
       } else {
         const responseData = await res.json();
         console.log('Events extracted:', responseData);
+        
+        // Store events for display
+        if (responseData.events && Array.isArray(responseData.events)) {
+          setEvents(responseData.events);
+        }
 
         if (responseData.icsContent) {
           const blob = new Blob([responseData.icsContent], {
@@ -215,7 +224,7 @@ function ScrapeForm() {
       `}</style>
 
       <div
-        className="min-vh-100 d-flex align-items-center justify-content-center flex-column flex-lg-row"
+        className="min-vh-100 d-flex align-items-start justify-content-center flex-column flex-lg-row"
         style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           padding: '2rem',
@@ -460,6 +469,11 @@ function ScrapeForm() {
               </div>
             </div>
           </div>
+        )}
+        
+        {/* Event Grid - Show events if available */}
+        {events.length > 0 && (
+          <EventGrid events={events} />
         )}
       </div>
     </>
