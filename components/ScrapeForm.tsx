@@ -36,14 +36,19 @@ function ScrapeForm() {
     const form = data;
 
     try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (form.preferIcs) {
+        headers['Accept'] = 'text/calendar';
+      }
+
       const res = await fetch('/api/scrape', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
-          url: form.url,
-          preferIcs: form.preferIcs
+          url: form.url
         })
       });
 
@@ -51,13 +56,35 @@ function ScrapeForm() {
          throw new Error(`HTTP error! status: ${res.status}`);
       }
 
-      const data: string = await res.json();
-      console.warn('GOT data from backend response', data);
+      if (form.preferIcs) {
+        // Handle ICS file download
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `events-${new Date().toISOString().split('T')[0]}.ics`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        // Handle JSON response
+        const responseData = await res.json();
+        console.log('Events extracted:', responseData);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      console.log('Form submitted:', data);
+        // If JSON response includes icsContent, create download from that
+        if (responseData.icsContent) {
+          const blob = new Blob([responseData.icsContent], { type: 'text/calendar;charset=utf-8' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `events-${new Date().toISOString().split('T')[0]}.ics`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        }
+      }
 
       // Success handling
       setSubmitSuccess(true);
@@ -89,7 +116,7 @@ function ScrapeForm() {
         />
 
         <h1 className={styles.title}>OctoAgenda</h1>
-        <p className={`${styles.subtitle} mb-2 fst-italic`}>⚠️ A work in progress.. some functionality 💩 the 🛌. </p>
+        <p className={`${styles.subtitle} mb-2 fst-italic`}>⚠️ A work in progress.. some functionality may 💩 the 🛌. </p>
         <p className={`${styles.subtitle}`}>Transform any webpage into calendar events with AI magic</p>
 
         {submitSuccess && (

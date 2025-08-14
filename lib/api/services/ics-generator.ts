@@ -3,18 +3,18 @@
  * Generates iCalendar files from event data
  */
 
-import ical, { 
-  ICalCalendar, 
+import ical, {
+  ICalCalendar,
   ICalCalendarMethod,
   ICalEvent,
   ICalEventData,
   ICalEventStatus,
   ICalAlarmType
 } from 'ical-generator';
-import { 
-  CalendarEvent, 
+import {
+  CalendarEvent,
   ICSOptions,
- 
+
 } from '@/lib/api/types/index';
 
 /**
@@ -39,10 +39,10 @@ export function generateICS(
   options?: Partial<ICSOptions>
 ): string {
   const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options };
-  
+
   // Create calendar
   const calendar = createCalendar(config);
-  
+
   // Add events to calendar
   for (const event of events) {
     try {
@@ -52,7 +52,7 @@ export function generateICS(
       // Continue with other events
     }
   }
-  
+
   // Generate ICS string
   const icsString = calendar.toString();
   console.log('Generated ICS length:', icsString?.length || 0);
@@ -68,11 +68,11 @@ export function generateSingleEventICS(
   options?: Partial<ICSOptions>
 ): string {
   const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options, method: 'REQUEST' };
-  
+
   // Create calendar with single event
   const calendar = createCalendar(config);
   addEventToCalendar(calendar, event, config);
-  
+
   return calendar.toString();
 }
 
@@ -87,7 +87,7 @@ function createCalendar(options: ICSOptions): ICalCalendar {
     timezone: options.timezone,
     scale: options.scale
   });
-  
+
   // Set calendar method
   if (options.method) {
     const methodMap: Record<string, ICalCalendarMethod> = {
@@ -96,13 +96,13 @@ function createCalendar(options: ICSOptions): ICalCalendar {
       'REPLY': ICalCalendarMethod.REPLY,
       'CANCEL': ICalCalendarMethod.CANCEL
     };
-    
+
     const method = methodMap[options.method];
     if (method) {
       calendar.method(method);
     }
   }
-  
+
   return calendar;
 }
 
@@ -124,20 +124,20 @@ function addEventToCalendar(
     timezone: event.timezone || options.timezone,
     categories: event.categories?.map(cat => ({ name: cat }))
   };
-  
+
   // Add URL if available
   if (event.url) {
     eventData.url = event.url;
   }
-  
+
   // Add organizer if available
   if (event.organizer) {
     eventData.organizer = {
-      name: event.organizer.name,
+      name: event.organizer.name || 'system',
       email: event.organizer.email || 'noreply@example.com'
     };
   }
-  
+
   // Set status
   if (event.status) {
     const statusMap: Record<string, ICalEventStatus> = {
@@ -145,19 +145,19 @@ function addEventToCalendar(
       'TENTATIVE': ICalEventStatus.TENTATIVE,
       'CANCELLED': ICalEventStatus.CANCELLED
     };
-    
+
     const status = statusMap[event.status];
     if (status) {
       eventData.status = status;
     }
   }
-  
+
   // Create event
   const calEvent = calendar.createEvent(eventData);
-  
+
   // Set UID separately
   calEvent.uid(event.uid || generateUID(event));
-  
+
   // Add attendees
   if (event.attendees && event.attendees.length > 0) {
     for (const attendee of event.attendees) {
@@ -170,7 +170,7 @@ function addEventToCalendar(
       });
     }
   }
-  
+
   // Add recurring rule if present
   if (event.recurringRule) {
     try {
@@ -180,17 +180,17 @@ function addEventToCalendar(
       console.warn(`Failed to apply recurring rule: ${error}`);
     }
   }
-  
+
   // Add alarm if configured
   if (options.includeAlarms) {
     const alarmMinutes = options.defaultAlarmMinutes || 30;
-    
+
     calEvent.createAlarm({
       type: ICalAlarmType.display,
       trigger: -alarmMinutes * 60, // Negative seconds before event
       description: `Reminder: ${event.title}`
     });
-    
+
     // Add email alarm if organizer email is available
     if (event.organizer?.email) {
       const emailAlarm = calEvent.createAlarm({
@@ -199,14 +199,14 @@ function addEventToCalendar(
         description: `Reminder: ${event.title}`,
         summary: `Event Reminder: ${event.title}`
       });
-      
+
       emailAlarm.createAttendee({
         email: event.organizer.email,
         name: event.organizer.name
       });
     }
   }
-  
+
   return calEvent;
 }
 
@@ -217,7 +217,7 @@ function generateUID(event: CalendarEvent): string {
   const timestamp = event.startTime.getTime();
   const titleHash = simpleHash(event.title);
   const random = Math.random().toString(36).substring(2, 9);
-  
+
   return `${timestamp}-${titleHash}-${random}@ics-scraper`;
 }
 
@@ -240,36 +240,36 @@ function simpleHash(str: string): string {
 function applyRecurringRule(event: ICalEvent, rrule: string): void {
   // Parse RRULE string
   const rules = parseRRule(rrule);
-  
+
   if (rules.freq) {
     const repeating: any = {
       freq: rules.freq
     };
-    
+
     if (rules.interval) {
       repeating.interval = rules.interval;
     }
-    
+
     if (rules.count) {
       repeating.count = rules.count;
     }
-    
+
     if (rules.until) {
       repeating.until = rules.until;
     }
-    
+
     if (rules.byDay) {
       repeating.byDay = rules.byDay;
     }
-    
+
     if (rules.byMonth) {
       repeating.byMonth = rules.byMonth;
     }
-    
+
     if (rules.byMonthDay) {
       repeating.byMonthDay = rules.byMonthDay;
     }
-    
+
     event.repeating(repeating);
   }
 }
@@ -279,49 +279,49 @@ function applyRecurringRule(event: ICalEvent, rrule: string): void {
  */
 function parseRRule(rrule: string): Record<string, any> {
   const rules: Record<string, any> = {};
-  
+
   // Remove RRULE: prefix if present
   const ruleStr = rrule.replace(/^RRULE:/i, '');
-  
+
   // Split into key-value pairs
   const pairs = ruleStr.split(';');
-  
+
   for (const pair of pairs) {
     const [key, value] = pair.split('=');
-    
+
     if (!key || !value) continue;
-    
+
     switch (key.toUpperCase()) {
       case 'FREQ':
         rules.freq = value.toUpperCase();
         break;
-      
+
       case 'INTERVAL':
         rules.interval = parseInt(value, 10);
         break;
-      
+
       case 'COUNT':
         rules.count = parseInt(value, 10);
         break;
-      
+
       case 'UNTIL':
         rules.until = new Date(value);
         break;
-      
+
       case 'BYDAY':
         rules.byDay = value.split(',');
         break;
-      
+
       case 'BYMONTH':
         rules.byMonth = value.split(',').map(m => parseInt(m, 10));
         break;
-      
+
       case 'BYMONTHDAY':
         rules.byMonthDay = value.split(',').map(d => parseInt(d, 10));
         break;
     }
   }
-  
+
   return rules;
 }
 
@@ -334,20 +334,20 @@ export function validateICS(icsContent: string): boolean {
     if (!icsContent.includes('BEGIN:VCALENDAR')) {
       return false;
     }
-    
+
     if (!icsContent.includes('END:VCALENDAR')) {
       return false;
     }
-    
+
     if (!icsContent.includes('VERSION:2.0')) {
       return false;
     }
-    
+
     // Check for at least one event
     if (!icsContent.includes('BEGIN:VEVENT')) {
       return false;
     }
-    
+
     return true;
   } catch {
     return false;
@@ -398,7 +398,7 @@ export function batchGenerateICS(
 export function mergeICSFiles(icsFiles: string[], options?: Partial<ICSOptions>): string {
   const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options };
   const calendar = createCalendar(config);
-  
+
   // Extract events from each ICS file and add to merged calendar
   for (const icsContent of icsFiles) {
     try {
@@ -410,7 +410,7 @@ export function mergeICSFiles(icsFiles: string[], options?: Partial<ICSOptions>)
       console.error('Failed to merge ICS file:', error);
     }
   }
-  
+
   return calendar.toString();
 }
 
@@ -419,10 +419,10 @@ export function mergeICSFiles(icsFiles: string[], options?: Partial<ICSOptions>)
  */
 function parseICSEvents(icsContent: string): CalendarEvent[] {
   const events: CalendarEvent[] = [];
-  
+
   // This is a simplified parser - in production, use a proper ICS parser library
   const eventMatches = icsContent.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g);
-  
+
   if (eventMatches) {
     for (const eventStr of eventMatches) {
       const event = parseICSEvent(eventStr);
@@ -431,7 +431,7 @@ function parseICSEvents(icsContent: string): CalendarEvent[] {
       }
     }
   }
-  
+
   return events;
 }
 
@@ -444,17 +444,17 @@ function parseICSEvent(eventStr: string): CalendarEvent | null {
       const match = eventStr.match(new RegExp(`${field}:(.*)`, 'i'));
       return match && match[1] ? match[1].trim() : undefined;
     };
-    
+
     const summary = getField('SUMMARY');
     const dtstart = getField('DTSTART');
     const dtend = getField('DTEND');
     const location = getField('LOCATION');
     const description = getField('DESCRIPTION');
-    
+
     if (!summary || !dtstart) {
       return null;
     }
-    
+
     return {
       title: summary,
       startTime: parseICSDate(dtstart),
@@ -480,10 +480,10 @@ function parseICSDate(dateStr: string): Date {
     const hour = parseInt(dateStr.substring(9, 11), 10);
     const minute = parseInt(dateStr.substring(11, 13), 10);
     const second = parseInt(dateStr.substring(13, 15), 10);
-    
+
     return new Date(Date.UTC(year, month, day, hour, minute, second));
   }
-  
+
   return new Date(dateStr);
 }
 
