@@ -103,6 +103,7 @@ function ScrapeForm() {
 
   return (
     <>
+      {/* Animation styles */}
       <style jsx>{`
         @keyframes floatUp {
           from {
