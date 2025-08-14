@@ -33,8 +33,27 @@ function ScrapeForm() {
     setIsLoading(true);
     setSubmitSuccess(false);
     setSubmitError('');
+    const form = data;
 
     try {
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: form.url,
+          preferIcs: form.preferIcs
+        })
+      });
+
+      if (!res.ok) {
+         throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const data: string = await res.json();
+      console.warn('GOT data from backend response', data);
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
 

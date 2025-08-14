@@ -29,7 +29,7 @@ function createClient(): Anthropic {
       false
     );
   }
-  
+
   return createAnthropicClient({
     apiKey,
     model: 'claude-3-haiku-20240307',
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Scraping error:', error);
-    
+
     if (error instanceof ScraperError) {
       return NextResponse.json({
         success: false,

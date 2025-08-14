@@ -78,7 +78,6 @@ export async function scrapeEvents(config: ScraperConfig, anthropicClient: Anthr
     // Step 2: Preprocess HTML
     console.log('Starting preprocess HTML content');
     const processedContent = preprocessHTML(html);
-    console.log('Preprocessed HTML content', JSON.stringify(processedContent, null, 2));
 
     if (!hasEventContent(processedContent)) {
       warnings.push('No event content detected in HTML');
