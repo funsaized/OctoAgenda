@@ -35,10 +35,87 @@
   }
 }
 
+/* Added mascot container and animations for octopus and calendar theme */
+.mascotContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 0 auto 2rem;
+  width: 120px;
+  height: 120px;
+}
+
+.mascot {
+  display: block;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  animation: wiggle 3s ease-in-out infinite;
+  transition: transform 0.3s ease;
+  border-radius: 10px;
+}
+
+.mascot:hover {
+  transform: scale(1.1);
+  animation: wiggleFast 0.5s ease-in-out infinite;
+}
+
+.calendarIcon {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 1.5rem;
+  animation: bounce 2s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg) translateY(-2px);
+  }
+  75% {
+    transform: rotate(3deg) translateY(-2px);
+  }
+}
+
+@keyframes wiggleFast {
+  0%,
+  100% {
+    transform: scale(1.1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.1) rotate(-5deg) translateY(-3px);
+  }
+  75% {
+    transform: scale(1.1) rotate(5deg) translateY(-3px);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
 .logo {
   display: block;
   margin: 0 auto 2rem;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.titleContainer {
+  text-align: center;
+  color: #333;
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
 }
 
 .title {
@@ -47,6 +124,11 @@
   font-size: 1.75rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
+  /* Added gradient text effect for calendar theme */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .subtitle {
@@ -215,13 +297,28 @@
   .container {
     padding: 1rem;
   }
-  
+
   .card {
     padding: 1.5rem;
     border-radius: 15px;
   }
-  
+
   .title {
     font-size: 1.5rem;
+  }
+
+  /* Responsive adjustments for mascot */
+  .mascotContainer {
+    width: 100px;
+    height: 100px;
+  }
+
+  .mascot {
+    width: 100px;
+    height: 100px;
+  }
+
+  .calendarIcon {
+    font-size: 1.2rem;
   }
 }
