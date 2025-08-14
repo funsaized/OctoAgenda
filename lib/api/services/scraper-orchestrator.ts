@@ -12,11 +12,15 @@ import {
   Result,
   ICSOptions,
   ScraperConfig,
-  ScraperResult
+  ScraperResult,
 } from '@/lib/api/types/index';
 import { fetchHTML } from '@/lib/api/services/html-fetcher';
 import { preprocessHTML, hasEventContent } from '@/lib/api/services/content-preprocessor';
-import { validateExtraction, batchExtractEvents, ExtractionContext } from '@/lib/api/services/anthropic-ai';
+import {
+  validateExtraction,
+  batchExtractEvents,
+  ExtractionContext,
+} from '@/lib/api/services/anthropic-ai';
 import type { Anthropic } from '@anthropic-ai/sdk';
 import { generateICS, generateSingleEventICS } from '@/lib/api/services/ics-generator';
 
@@ -31,27 +35,30 @@ const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
     maxAttempts: 3,
     initialDelay: 1000,
     maxDelay: 30000,
-    backoffMultiplier: 2
+    backoffMultiplier: 2,
   },
   cache: {
     enabled: true,
-    ttl: 3600
+    ttl: 3600,
   },
   timezone: {
     default: 'America/New_York',
-    autoDetect: true
+    autoDetect: true,
   },
   ai: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     model: 'claude-3-haiku-20240307',
-    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
-  }
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
+  },
 };
 
 /**
  * Main scraper function
  */
-export async function scrapeEvents(config: ScraperConfig, anthropicClient: Anthropic): Promise<ScraperResult> {
+export async function scrapeEvents(
+  config: ScraperConfig,
+  anthropicClient: Anthropic
+): Promise<ScraperResult> {
   const startTime = Date.now();
   const warnings: string[] = [];
   const processing = { ...DEFAULT_PROCESSING_OPTIONS, ...config.processing };
@@ -63,7 +70,7 @@ export async function scrapeEvents(config: ScraperConfig, anthropicClient: Anthr
       headers: config.source.headers,
       userAgent: config.source.userAgent,
       timeout: config.source.timeout,
-      useCache: processing.cache.enabled
+      useCache: processing.cache.enabled,
     });
 
     if (!html) {
@@ -121,9 +128,11 @@ export async function scrapeEvents(config: ScraperConfig, anthropicClient: Anthr
     if (!validation.valid) {
       console.log('Validation errors:');
       validation.errors.forEach((error, idx) => {
-        console.log(`  ${idx + 1}. ${error.message} (event ${error.eventIndex}, field: ${error.field})`);
+        console.log(
+          `  ${idx + 1}. ${error.message} (event ${error.eventIndex}, field: ${error.field})`
+        );
       });
-      warnings.push(...validation.errors.map(e => e.message));
+      warnings.push(...validation.errors.map((e) => e.message));
     }
 
     // Step 5: Generate ICS files
@@ -168,20 +177,15 @@ export async function scrapeEvents(config: ScraperConfig, anthropicClient: Anthr
         processedEvents: validation.validatedEvents.length,
         failedEvents: validation.invalidEvents.length,
         processingTime,
-        warnings
-      }
+        warnings,
+      },
     };
   } catch (error) {
     if (error instanceof ScraperError) {
       throw error;
     }
 
-    throw new ScraperError(
-      `Scraping failed: ${error}`,
-      ErrorCode.INTERNAL_ERROR,
-      { error },
-      false
-    );
+    throw new ScraperError(`Scraping failed: ${error}`, ErrorCode.INTERNAL_ERROR, { error }, false);
   }
 }
 
@@ -230,7 +234,7 @@ async function extractEventsFromContent(
       sourceUrl: source.url,
       timezoneHint: processing.timezone.default,
       currentDate: new Date(),
-      language: processedContent.metadata.language
+      language: processedContent.metadata.language,
     };
 
     // Extract from high-priority chunks
@@ -294,13 +298,15 @@ export async function scrapeMultipleSources(
     } catch (error) {
       results.push({
         success: false,
-        error: error instanceof ScraperError ? error :
-          new ScraperError(
-            `Unknown error: ${error}`,
-            ErrorCode.INTERNAL_ERROR,
-            { error },
-            false
-          )
+        error:
+          error instanceof ScraperError
+            ? error
+            : new ScraperError(
+                `Unknown error: ${error}`,
+                ErrorCode.INTERNAL_ERROR,
+                { error },
+                false
+              ),
       });
     }
   }
@@ -351,9 +357,11 @@ export function createConfigFromEnv(): ScraperConfig {
     source: {
       url: process.env.SOURCE_URL || '',
       userAgent: process.env.SOURCE_USER_AGENT,
-      selectors: process.env.SOURCE_SELECTOR ? {
-        eventContainer: process.env.SOURCE_SELECTOR
-      } : undefined
+      selectors: process.env.SOURCE_SELECTOR
+        ? {
+            eventContainer: process.env.SOURCE_SELECTOR,
+          }
+        : undefined,
     },
     processing: {
       batchSize: parseInt(process.env.BATCH_SIZE || '5', 10),
@@ -361,25 +369,25 @@ export function createConfigFromEnv(): ScraperConfig {
         maxAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
         initialDelay: 1000,
         maxDelay: 30000,
-        backoffMultiplier: 2
+        backoffMultiplier: 2,
       },
       cache: {
         enabled: process.env.CACHE_ENABLED !== 'false',
-        ttl: parseInt(process.env.CACHE_TTL || '3600', 10)
+        ttl: parseInt(process.env.CACHE_TTL || '3600', 10),
       },
       timezone: {
         default: process.env.DEFAULT_TIMEZONE || 'America/New_York',
-        autoDetect: process.env.DETECT_TIMEZONE !== 'false'
+        autoDetect: process.env.DETECT_TIMEZONE !== 'false',
       },
       ai: {
         apiKey: process.env.ANTHROPIC_API_KEY || '',
-        model: 'claude-3-haiku-20240307'
-      }
+        model: 'claude-3-haiku-20240307',
+      },
     },
     ics: {
       calendarName: process.env.CALENDAR_NAME || 'Scraped Events',
       timezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
-      includeAlarms: process.env.INCLUDE_ALARMS !== 'false'
-    }
+      includeAlarms: process.env.INCLUDE_ALARMS !== 'false',
+    },
   };
 }

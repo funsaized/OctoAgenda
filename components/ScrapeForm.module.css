@@ -17,7 +17,9 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   padding: 2rem;
   animation: floatUp 0.5s ease-out;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .card:hover {
@@ -235,9 +237,16 @@
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
 }
 
 .helpText {
@@ -259,7 +268,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .successMessage {
@@ -292,7 +303,6 @@
   margin-bottom: 1.5rem;
   animation: slideDown 0.3s ease;
 }
-
 
 /* Added iframe preview card styles */
 .previewCard {

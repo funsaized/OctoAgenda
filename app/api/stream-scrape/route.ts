@@ -27,11 +27,11 @@ function createClient(): Anthropic {
       false
     );
   }
-  
+
   return createAnthropicClient({
     apiKey,
     model: 'claude-3-haiku-20240307',
-    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
   });
 }
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   initializeCache({
     enabled: true,
     ttl: parseInt(process.env.CACHE_TTL || '3600000', 10),
-    maxSize: parseInt(process.env.CACHE_MAX_SIZE || '50', 10)
+    maxSize: parseInt(process.env.CACHE_MAX_SIZE || '50', 10),
   });
 
   try {
@@ -60,7 +60,9 @@ export async function POST(request: NextRequest) {
     (async () => {
       try {
         // Send initial message
-        await writer.write(encoder.encode('data: {"type":"start","message":"Starting event scraping..."}\n\n'));
+        await writer.write(
+          encoder.encode('data: {"type":"start","message":"Starting event scraping..."}\n\n')
+        );
 
         // Create Anthropic client
         const anthropicClient = createClient();
@@ -69,19 +71,20 @@ export async function POST(request: NextRequest) {
         const { scrapeEvents } = await import('@/lib/api/services/scraper-orchestrator');
 
         // Send progress update
-        await writer.write(encoder.encode('data: {"type":"progress","message":"Fetching and processing events..."}\n\n'));
+        await writer.write(
+          encoder.encode(
+            'data: {"type":"progress","message":"Fetching and processing events..."}\n\n'
+          )
+        );
 
         // Perform scraping
-        const result = await scrapeEvents(
-          config,
-          anthropicClient
-        );
+        const result = await scrapeEvents(config, anthropicClient);
 
         // Send events one by one for streaming effect
         for (const event of result.events) {
           const message = JSON.stringify({
             type: 'event',
-            event
+            event,
           });
           await writer.write(encoder.encode(`data: ${message}\n\n`));
         }
@@ -91,19 +94,18 @@ export async function POST(request: NextRequest) {
           type: 'complete',
           metadata: result.metadata,
           totalEvents: result.events.length,
-          icsContent: result.icsContent
+          icsContent: result.icsContent,
         });
         await writer.write(encoder.encode(`data: ${completeMessage}\n\n`));
-
       } catch (error) {
         console.error('Streaming error:', error);
-        
+
         const errorMessage = JSON.stringify({
           type: 'error',
           error: {
             code: error instanceof ScraperError ? error.code : ErrorCode.INTERNAL_ERROR,
-            message: error instanceof Error ? error.message : 'Unknown error occurred'
-          }
+            message: error instanceof Error ? error.message : 'Unknown error occurred',
+          },
         });
         await writer.write(encoder.encode(`data: ${errorMessage}\n\n`));
       } finally {
@@ -116,33 +118,38 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
-
   } catch (error) {
     console.error('Stream setup error:', error);
-    
+
     if (error instanceof ScraperError) {
-      return NextResponse.json({
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          retryable: error.retryable
-        }
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            retryable: error.retryable,
+          },
+        },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({
-      success: false,
-      error: {
-        code: ErrorCode.INTERNAL_ERROR,
-        message: 'Failed to initialize streaming',
-        retryable: false
-      }
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Failed to initialize streaming',
+          retryable: false,
+        },
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -162,10 +169,10 @@ export async function GET() {
           batchSize: 'Number of events to process per batch (optional)',
           retryAttempts: 'Number of retry attempts for failed requests (optional)',
           timezone: 'Target timezone for events (optional)',
-          calendarName: 'Name for the generated calendar (optional)'
+          calendarName: 'Name for the generated calendar (optional)',
         },
-        response: 'Server-sent event stream with progress updates'
-      }
-    }
+        response: 'Server-sent event stream with progress updates',
+      },
+    },
   });
 }

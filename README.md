@@ -15,9 +15,11 @@ A tool that scrapes event data from web pages and generates ICS calendar files u
 ## API Endpoints
 
 ### POST `/api/scrape`
+
 Scrape events from a URL and generate ICS file.
 
 **Request:**
+
 ```json
 {
   "url": "https://example.com/events",
@@ -31,20 +33,24 @@ Scrape events from a URL and generate ICS file.
 **Response:** JSON with events and ICS content or direct ICS file download.
 
 ### POST `/api/stream-scrape`
+
 Streaming version with real-time progress updates.
 
 **Response:** Server-Sent Events stream with progress updates.
 
 ### GET `/api/cron`
+
 Scheduled endpoint for automated scraping (Vercel Cron).
 
 ## Environment Variables
 
 ### Required
+
 - `ANTHROPIC_API_KEY` - Your Anthropic API key for Claude AI
 - `SOURCE_URL` - Default URL to scrape (used by cron job)
 
 ### Optional
+
 - `CRON_SECRET` - Secret for cron job authentication
 - `BATCH_SIZE` - Number of events to process per batch (default: 50)
 - `RETRY_ATTEMPTS` - Number of retry attempts (default: 3)
@@ -57,17 +63,20 @@ Scheduled endpoint for automated scraping (Vercel Cron).
 ## Getting Started
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Set up environment variables:**
+
    ```bash
    cp .env.example .env.local
    # Add your ANTHROPIC_API_KEY and SOURCE_URL
    ```
 
 3. **Run development server:**
+
    ```bash
    npm run dev
    ```
@@ -84,6 +93,7 @@ Scheduled endpoint for automated scraping (Vercel Cron).
 ### Vercel (Recommended)
 
 1. **Connect to Vercel and deploy:**
+
    ```bash
    git push origin main
    ```

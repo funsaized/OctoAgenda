@@ -81,7 +81,7 @@ export class CircuitBreaker {
 
     // Remove old failures outside monitoring window
     const cutoff = now - this.config.monitoringWindow;
-    this.failures = this.failures.filter(f => f > cutoff);
+    this.failures = this.failures.filter((f) => f > cutoff);
 
     if (this.failures.length >= this.config.failureThreshold) {
       this.state = 'OPEN';
@@ -97,7 +97,7 @@ export class CircuitBreaker {
       state: this.state,
       failures: this.failures.length,
       successes: this.successes,
-      lastFailureTime: this.lastFailureTime
+      lastFailureTime: this.lastFailureTime,
     };
   }
 }
@@ -143,7 +143,7 @@ export class PerformanceMonitor {
         count: values.length,
         latest: values[values.length - 1],
         average: this.calculateAverage(values, 'duration'),
-        percentile95: this.calculatePercentile(values, 0.95, 'duration')
+        percentile95: this.calculatePercentile(values, 0.95, 'duration'),
       };
     }
 
@@ -159,9 +159,7 @@ export class PerformanceMonitor {
   private calculatePercentile(values: any[], percentile: number, field: string): number {
     if (values.length === 0) return 0;
 
-    const sorted = values
-      .map(v => v[field] || 0)
-      .sort((a, b) => a - b);
+    const sorted = values.map((v) => v[field] || 0).sort((a, b) => a - b);
 
     const index = Math.ceil(sorted.length * percentile) - 1;
     return sorted[index] || 0;
@@ -238,7 +236,7 @@ export function smartChunk(
 export class BatchProcessor<T, R> {
   constructor(
     private batchSize: number = 5,
-    private delayBetweenBatches: number = 1000,
+    private delayBetweenBatches: number = 1000
     // private _maxConcurrency: number = 3
   ) {}
 
@@ -253,22 +251,22 @@ export class BatchProcessor<T, R> {
       const batch = items.slice(i, i + this.batchSize);
 
       // Process batch with concurrency limit
-      const batchPromises = batch.map(item =>
-        processor(item).catch(error => {
+      const batchPromises = batch.map((item) =>
+        processor(item).catch((error) => {
           console.error('Batch item failed:', error);
           return null;
         })
       );
 
       const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults.filter(r => r !== null) as R[]);
+      results.push(...(batchResults.filter((r) => r !== null) as R[]));
 
       // Report progress
       onProgress?.(Math.min(i + this.batchSize, items.length), items.length);
 
       // Delay between batches (except for last batch)
       if (i + this.batchSize < items.length) {
-        await new Promise(resolve => setTimeout(resolve, this.delayBetweenBatches));
+        await new Promise((resolve) => setTimeout(resolve, this.delayBetweenBatches));
       }
     }
 
@@ -297,7 +295,7 @@ export class MemoryMonitor {
       rss: current.rss - this.initialUsage.rss,
       heapUsed: current.heapUsed - this.initialUsage.heapUsed,
       heapTotal: current.heapTotal - this.initialUsage.heapTotal,
-      external: current.external - this.initialUsage.external
+      external: current.external - this.initialUsage.external,
     };
   }
 
@@ -307,7 +305,7 @@ export class MemoryMonitor {
 
     return {
       pressure: usagePercent > 80,
-      usage: usagePercent
+      usage: usagePercent,
     };
   }
 }
@@ -403,7 +401,7 @@ export function createCircuitBreaker(config?: Partial<CircuitBreakerConfig>): Ci
     failureThreshold: 5,
     successThreshold: 3,
     timeout: 60000,
-    monitoringWindow: 300000
+    monitoringWindow: 300000,
   };
 
   return new CircuitBreaker({ ...defaultConfig, ...config });
@@ -464,7 +462,7 @@ export function memoize<T extends (...args: any[]) => any>(
     // Cache result
     cache.set(key, {
       value: result,
-      expiry: now + ttl
+      expiry: now + ttl,
     });
 
     // Clean expired entries periodically
@@ -549,7 +547,7 @@ export class ResourcePool<T> {
 
       // Timeout after 30 seconds
       setTimeout(() => {
-        const index = this.waiting.findIndex(w => w.resolve === resolve);
+        const index = this.waiting.findIndex((w) => w.resolve === resolve);
         if (index >= 0) {
           this.waiting.splice(index, 1);
           reject(new Error('Resource acquisition timeout'));
@@ -600,7 +598,7 @@ export class ResourcePool<T> {
       available: this.available.length,
       inUse: this.inUse.size,
       waiting: this.waiting.length,
-      total: this.available.length + this.inUse.size
+      total: this.available.length + this.inUse.size,
     };
   }
 }

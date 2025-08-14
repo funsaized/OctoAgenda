@@ -10,7 +10,7 @@ import {
   ScraperError,
   ErrorCode,
   Result,
-  CacheConfiguration
+  CacheConfiguration,
 } from '@/lib/api/types/index';
 
 // Simple in-memory cache implementation
@@ -58,7 +58,7 @@ class HTMLCache {
     this.cache.set(key, {
       content,
       timestamp: Date.now(),
-      ttl: ttl || this.config.ttl
+      ttl: ttl || this.config.ttl,
     });
   }
 
@@ -77,7 +77,7 @@ const defaultCacheConfig: CacheConfiguration = {
   enabled: true,
   ttl: 3600,
   maxSize: 100,
-  storage: 'memory'
+  storage: 'memory',
 };
 
 // Global cache instance
@@ -117,10 +117,12 @@ function isRetryableError(error: any): boolean {
   }
 
   // Network errors are generally retryable
-  if (error.code === 'ECONNREFUSED' ||
-      error.code === 'ENOTFOUND' ||
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'ECONNRESET') {
+  if (
+    error.code === 'ECONNREFUSED' ||
+    error.code === 'ENOTFOUND' ||
+    error.code === 'ETIMEDOUT' ||
+    error.code === 'ECONNRESET'
+  ) {
     return true;
   }
 
@@ -198,22 +200,20 @@ async function validateResponse(response: Response, url: string): Promise<void> 
 /**
  * Fetch HTML with a single attempt (used by retry logic)
  */
-async function fetchHTMLAttempt(
-  url: string,
-  options?: FetchOptions
-): Promise<string> {
+async function fetchHTMLAttempt(url: string, options?: FetchOptions): Promise<string> {
   const timeout = options?.timeout || 30000;
-  const userAgent = options?.userAgent ||
+  const userAgent =
+    options?.userAgent ||
     'Mozilla/5.0 (compatible; ICS-Scraper/1.0; +https://github.com/yourusername/ics-scraper)';
 
   const headers: Record<string, string> = {
     'User-Agent': userAgent,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Accept-Encoding': 'gzip, deflate',
-    'Connection': 'keep-alive',
+    Connection: 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
-    ...options?.headers
+    ...options?.headers,
   };
 
   const controller = new AbortController();
@@ -224,7 +224,7 @@ async function fetchHTMLAttempt(
       method: 'GET',
       headers,
       signal: controller.signal,
-      redirect: options?.followRedirects !== false ? 'follow' : 'manual'
+      redirect: options?.followRedirects !== false ? 'follow' : 'manual',
     });
 
     clearTimeout(timeoutId);
@@ -234,12 +234,7 @@ async function fetchHTMLAttempt(
     const html = await response.text();
 
     if (!html || html.trim().length === 0) {
-      throw new ScraperError(
-        'Empty response received',
-        ErrorCode.INVALID_HTML,
-        { url },
-        true
-      );
+      throw new ScraperError('Empty response received', ErrorCode.INVALID_HTML, { url }, true);
     }
 
     return html;
@@ -260,12 +255,7 @@ async function fetchHTMLAttempt(
     }
 
     if (error.code === 'ENOTFOUND') {
-      throw new ScraperError(
-        `DNS lookup failed for ${url}`,
-        ErrorCode.DNS_FAILURE,
-        { url },
-        false
-      );
+      throw new ScraperError(`DNS lookup failed for ${url}`, ErrorCode.DNS_FAILURE, { url }, false);
     }
 
     throw new ScraperError(
@@ -280,20 +270,12 @@ async function fetchHTMLAttempt(
 /**
  * Main function to fetch HTML with retry logic and caching
  */
-export async function fetchHTML(
-  url: string,
-  options?: FetchOptions
-): Promise<string> {
+export async function fetchHTML(url: string, options?: FetchOptions): Promise<string> {
   // Validate URL
   try {
     new URL(url);
   } catch {
-    throw new ScraperError(
-      `Invalid URL: ${url}`,
-      ErrorCode.CONFIGURATION_ERROR,
-      { url },
-      false
-    );
+    throw new ScraperError(`Invalid URL: ${url}`, ErrorCode.CONFIGURATION_ERROR, { url }, false);
   }
 
   // Check cache first
@@ -321,17 +303,14 @@ export async function fetchHTML(
     onFailedAttempt: (error: any) => {
       console.log(
         `Attempt ${error.attemptNumber} failed for ${url}. ` +
-        `${error.retriesLeft} retries left. Error: ${error.message}`
+          `${error.retriesLeft} retries left. Error: ${error.message}`
       );
     },
-    shouldRetry: (error: any) => isRetryableError(error)
+    shouldRetry: (error: any) => isRetryableError(error),
   };
 
   try {
-    const html = await pRetry(
-      () => fetchHTMLAttempt(url, options),
-      retryOptions
-    );
+    const html = await pRetry(() => fetchHTMLAttempt(url, options), retryOptions);
 
     // Cache the successful result
     if (options?.useCache !== false) {
@@ -373,13 +352,15 @@ export async function fetchMultipleHTML(
       } catch (error) {
         return {
           success: false as const,
-          error: error instanceof ScraperError ? error :
-            new ScraperError(
-              `Unknown error: ${error}`,
-              ErrorCode.INTERNAL_ERROR,
-              { url },
-              false
-            )
+          error:
+            error instanceof ScraperError
+              ? error
+              : new ScraperError(
+                  `Unknown error: ${error}`,
+                  ErrorCode.INTERNAL_ERROR,
+                  { url },
+                  false
+                ),
         };
       }
     });
@@ -389,7 +370,7 @@ export async function fetchMultipleHTML(
 
     // Add delay between batches to avoid rate limiting
     if (i + concurrency < urls.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
 
@@ -399,10 +380,7 @@ export async function fetchMultipleHTML(
 /**
  * Check if a URL is accessible
  */
-export async function isURLAccessible(
-  url: string,
-  options?: FetchOptions
-): Promise<boolean> {
+export async function isURLAccessible(url: string, options?: FetchOptions): Promise<boolean> {
   try {
     await fetchHTML(url, {
       ...options,
@@ -410,8 +388,8 @@ export async function isURLAccessible(
         maxAttempts: 1,
         initialDelay: 0,
         maxDelay: 0,
-        backoffMultiplier: 1
-      }
+        backoffMultiplier: 1,
+      },
     });
     return true;
   } catch {

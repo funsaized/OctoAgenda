@@ -18,20 +18,14 @@ export async function GET(request: NextRequest) {
     const authHeader = (await headers()).get('authorization');
     if (process.env.CRON_SECRET) {
       if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
     }
 
     // Get the source URL from environment or use default
     const sourceUrl = process.env.SOURCE_URL;
     if (!sourceUrl) {
-      return NextResponse.json(
-        { error: 'SOURCE_URL not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'SOURCE_URL not configured' }, { status: 500 });
     }
 
     // Call the scrape endpoint internally
@@ -46,17 +40,14 @@ export async function GET(request: NextRequest) {
         batchSize: parseInt(process.env.BATCH_SIZE || '50', 10),
         retryAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
         timezone: process.env.DEFAULT_TIMEZONE,
-        calendarName: 'Automated Scrape'
-      })
+        calendarName: 'Automated Scrape',
+      }),
     });
 
     if (!response.ok) {
       const error = await response.json();
       console.error('Cron scraping failed:', error);
-      return NextResponse.json(
-        { success: false, error },
-        { status: response.status }
-      );
+      return NextResponse.json({ success: false, error }, { status: response.status });
     }
 
     const result = await response.json();
@@ -66,9 +57,8 @@ export async function GET(request: NextRequest) {
       success: true,
       message: 'Cron job executed successfully',
       eventsCount: result.events?.length || 0,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error('Cron job error:', error);
     return NextResponse.json(
@@ -76,8 +66,8 @@ export async function GET(request: NextRequest) {
         success: false,
         error: {
           message: error instanceof Error ? error.message : 'Cron job failed',
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       },
       { status: 500 }
     );

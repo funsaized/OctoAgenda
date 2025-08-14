@@ -33,7 +33,7 @@ function createClient(): Anthropic {
   return createAnthropicClient({
     apiKey,
     model: 'claude-3-haiku-20240307',
-    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10)
+    maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
   });
 }
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   initializeCache({
     enabled: true,
     ttl: parseInt(process.env.CACHE_TTL || '3600000', 10),
-    maxSize: parseInt(process.env.CACHE_MAX_SIZE || '50', 10)
+    maxSize: parseInt(process.env.CACHE_MAX_SIZE || '50', 10),
   });
 
   try {
@@ -57,10 +57,7 @@ export async function POST(request: NextRequest) {
     const anthropicClient = createClient();
 
     // Perform scraping
-    const { events, icsContent, metadata } = await scrapeEvents(
-      config,
-      anthropicClient
-    );
+    const { events, icsContent, metadata } = await scrapeEvents(config, anthropicClient);
 
     // Determine response type
     const acceptHeader = request.headers.get('accept');
@@ -71,7 +68,7 @@ export async function POST(request: NextRequest) {
       const headers = new Headers(getICSHeaders(config.ics?.calendarName || 'Scraped Events'));
       return new NextResponse(icsContent, {
         status: 200,
-        headers
+        headers,
       });
     }
 
@@ -80,33 +77,38 @@ export async function POST(request: NextRequest) {
       success: true,
       metadata,
       events,
-      icsContent
+      icsContent,
     });
-
   } catch (error) {
     console.error('Scraping error:', error);
 
     if (error instanceof ScraperError) {
-      return NextResponse.json({
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          retryable: error.retryable
-        }
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            retryable: error.retryable,
+          },
+        },
+        { status: 500 }
+      );
     }
 
     // Generic error
-    return NextResponse.json({
-      success: false,
-      error: {
-        code: ErrorCode.INTERNAL_ERROR,
-        message: 'An unexpected error occurred',
-        retryable: false
-      }
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'An unexpected error occurred',
+          retryable: false,
+        },
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -125,9 +127,9 @@ export async function GET() {
           batchSize: 'Number of events to process per batch (optional)',
           retryAttempts: 'Number of retry attempts for failed requests (optional)',
           timezone: 'Target timezone for events (optional)',
-          calendarName: 'Name for the generated calendar (optional)'
-        }
-      }
-    }
+          calendarName: 'Name for the generated calendar (optional)',
+        },
+      },
+    },
   });
 }

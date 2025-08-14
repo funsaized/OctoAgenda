@@ -9,13 +9,9 @@ import ical, {
   ICalEvent,
   ICalEventData,
   ICalEventStatus,
-  ICalAlarmType
+  ICalAlarmType,
 } from 'ical-generator';
-import {
-  CalendarEvent,
-  ICSOptions,
-
-} from '@/lib/api/types/index';
+import { CalendarEvent, ICSOptions } from '@/lib/api/types/index';
 
 /**
  * Default ICS generation options
@@ -28,16 +24,13 @@ const DEFAULT_ICS_OPTIONS: ICSOptions = {
   includeAlarms: true,
   defaultAlarmMinutes: 30,
   method: 'PUBLISH',
-  scale: 'GREGORIAN'
+  scale: 'GREGORIAN',
 };
 
 /**
  * Generate ICS file from events
  */
-export function generateICS(
-  events: CalendarEvent[],
-  options?: Partial<ICSOptions>
-): string {
+export function generateICS(events: CalendarEvent[], options?: Partial<ICSOptions>): string {
   const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options };
 
   // Create calendar
@@ -85,16 +78,16 @@ function createCalendar(options: ICSOptions): ICalCalendar {
     description: options.description,
     prodId: options.prodId,
     timezone: options.timezone,
-    scale: options.scale
+    scale: options.scale,
   });
 
   // Set calendar method
   if (options.method) {
     const methodMap: Record<string, ICalCalendarMethod> = {
-      'PUBLISH': ICalCalendarMethod.PUBLISH,
-      'REQUEST': ICalCalendarMethod.REQUEST,
-      'REPLY': ICalCalendarMethod.REPLY,
-      'CANCEL': ICalCalendarMethod.CANCEL
+      PUBLISH: ICalCalendarMethod.PUBLISH,
+      REQUEST: ICalCalendarMethod.REQUEST,
+      REPLY: ICalCalendarMethod.REPLY,
+      CANCEL: ICalCalendarMethod.CANCEL,
     };
 
     const method = methodMap[options.method];
@@ -122,7 +115,7 @@ function addEventToCalendar(
     description: event.description,
     location: event.location,
     timezone: event.timezone || options.timezone,
-    categories: event.categories?.map(cat => ({ name: cat }))
+    categories: event.categories?.map((cat) => ({ name: cat })),
   };
 
   // Add URL if available
@@ -134,16 +127,16 @@ function addEventToCalendar(
   if (event.organizer) {
     eventData.organizer = {
       name: event.organizer.name || 'system',
-      email: event.organizer.email || 'noreply@example.com'
+      email: event.organizer.email || 'noreply@example.com',
     };
   }
 
   // Set status
   if (event.status) {
     const statusMap: Record<string, ICalEventStatus> = {
-      'CONFIRMED': ICalEventStatus.CONFIRMED,
-      'TENTATIVE': ICalEventStatus.TENTATIVE,
-      'CANCELLED': ICalEventStatus.CANCELLED
+      CONFIRMED: ICalEventStatus.CONFIRMED,
+      TENTATIVE: ICalEventStatus.TENTATIVE,
+      CANCELLED: ICalEventStatus.CANCELLED,
     };
 
     const status = statusMap[event.status];
@@ -166,7 +159,7 @@ function addEventToCalendar(
         name: attendee.name,
         rsvp: attendee.rsvp,
         status: attendee.status as any,
-        role: attendee.role as any
+        role: attendee.role as any,
       });
     }
   }
@@ -188,7 +181,7 @@ function addEventToCalendar(
     calEvent.createAlarm({
       type: ICalAlarmType.display,
       trigger: -alarmMinutes * 60, // Negative seconds before event
-      description: `Reminder: ${event.title}`
+      description: `Reminder: ${event.title}`,
     });
 
     // Add email alarm if organizer email is available
@@ -197,12 +190,12 @@ function addEventToCalendar(
         type: ICalAlarmType.email,
         trigger: -alarmMinutes * 60,
         description: `Reminder: ${event.title}`,
-        summary: `Event Reminder: ${event.title}`
+        summary: `Event Reminder: ${event.title}`,
       });
 
       emailAlarm.createAttendee({
         email: event.organizer.email,
-        name: event.organizer.name
+        name: event.organizer.name,
       });
     }
   }
@@ -228,7 +221,7 @@ function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(36);
@@ -243,7 +236,7 @@ function applyRecurringRule(event: ICalEvent, rrule: string): void {
 
   if (rules.freq) {
     const repeating: any = {
-      freq: rules.freq
+      freq: rules.freq,
     };
 
     if (rules.interval) {
@@ -313,11 +306,11 @@ function parseRRule(rrule: string): Record<string, any> {
         break;
 
       case 'BYMONTH':
-        rules.byMonth = value.split(',').map(m => parseInt(m, 10));
+        rules.byMonth = value.split(',').map((m) => parseInt(m, 10));
         break;
 
       case 'BYMONTHDAY':
-        rules.byMonthDay = value.split(',').map(d => parseInt(d, 10));
+        rules.byMonthDay = value.split(',').map((d) => parseInt(d, 10));
         break;
     }
   }
@@ -362,8 +355,8 @@ export function getICSHeaders(filename: string = 'events.ics'): Record<string, s
     'Content-Type': 'text/calendar; charset=utf-8',
     'Content-Disposition': `attachment; filename="${filename}"`,
     'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0'
+    Pragma: 'no-cache',
+    Expires: '0',
   };
 }
 
@@ -389,7 +382,7 @@ export function batchGenerateICS(
   eventSets: CalendarEvent[][],
   options?: Partial<ICSOptions>
 ): string[] {
-  return eventSets.map(events => generateICS(events, options));
+  return eventSets.map((events) => generateICS(events, options));
 }
 
 /**
@@ -461,7 +454,7 @@ function parseICSEvent(eventStr: string): CalendarEvent | null {
       endTime: dtend ? parseICSDate(dtend) : addDefaultDuration(parseICSDate(dtstart)),
       location: location || 'TBD',
       description: description || '',
-      timezone: 'UTC'
+      timezone: 'UTC',
     };
   } catch {
     return null;
