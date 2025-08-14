@@ -2,16 +2,15 @@
  * ICS File Generation Service
  * Generates iCalendar files from event data
  */
-
+import { CalendarEvent, ICSOptions } from '@/lib/api/types/index';
 import ical, {
+  ICalAlarmType,
   ICalCalendar,
   ICalCalendarMethod,
   ICalEvent,
   ICalEventData,
   ICalEventStatus,
-  ICalAlarmType,
 } from 'ical-generator';
-import { CalendarEvent, ICSOptions } from '@/lib/api/types/index';
 
 /**
  * Default ICS generation options

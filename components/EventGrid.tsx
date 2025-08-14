@@ -1,5 +1,7 @@
 import React from 'react';
+
 import { CalendarEvent } from '@/lib/api/types';
+
 import EventCard from './EventCard';
 
 interface EventGridProps {
@@ -17,6 +19,7 @@ const EventGrid: React.FC<EventGridProps> = ({ events }) => {
       style={{
         animation: 'floatUp 0.5s ease-out 0.3s both',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        maxWidth: '1200px',
       }}
     >
       {/* Header */}
@@ -42,7 +45,7 @@ const EventGrid: React.FC<EventGridProps> = ({ events }) => {
       </div>
 
       {/* Event Cards Grid */}
-      <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+      <div className="row row-cols-1 row-cols-sm-2 row-cols-md-2 row-cols-lg-3 g-4">
         {events.map((event, index) => (
           <div className="col" key={event.uid || index}>
             <EventCard event={event} index={index} />

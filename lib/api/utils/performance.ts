@@ -2,8 +2,7 @@
  * Performance Optimization Utilities
  * Implements caching, batching, circuit breakers, and monitoring
  */
-
-import { ScraperError, ErrorCode } from '@/lib/api/types/index';
+import { ErrorCode, ScraperError } from '@/lib/api/types/index';
 
 /**
  * Circuit breaker state

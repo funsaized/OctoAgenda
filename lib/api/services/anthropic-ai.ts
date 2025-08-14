@@ -2,10 +2,9 @@
  * Anthropic AI Integration Service
  * Uses Claude 3 Haiku for event extraction from HTML content
  */
-
+import { AIConfiguration, CalendarEvent, ErrorCode, ScraperError } from '@/lib/api/types/index';
 import Anthropic from '@anthropic-ai/sdk';
-import { CalendarEvent, ScraperError, ErrorCode, AIConfiguration } from '@/lib/api/types/index';
-import { parse as parsePartialJSON, Allow } from 'partial-json';
+import { Allow, parse as parsePartialJSON } from 'partial-json';
 
 /**
  * Extraction context for AI processing

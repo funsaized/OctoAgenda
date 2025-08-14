@@ -2,16 +2,16 @@
  * Main scraping API endpoint
  * Handles HTTP requests to scrape events and generate ICS files
  */
-
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeEvents } from '@/lib/api/services/scraper-orchestrator';
-import { ScraperConfig } from '@/lib/api/types/index';
+
 import { createAnthropicClient } from '@/lib/api/services/anthropic-ai';
-import type { Anthropic } from '@anthropic-ai/sdk';
 import { initializeCache } from '@/lib/api/services/html-fetcher';
 import { getICSHeaders } from '@/lib/api/services/ics-generator';
-import { ScraperError, ErrorCode } from '@/lib/api/types/index';
+import { scrapeEvents } from '@/lib/api/services/scraper-orchestrator';
+import { ScraperConfig } from '@/lib/api/types/index';
+import { ErrorCode, ScraperError } from '@/lib/api/types/index';
 import { validateConfig } from '@/lib/api/utils/config';
+import type { Anthropic } from '@anthropic-ai/sdk';
 
 // Configure runtime for Node.js compatibility
 export const maxDuration = 300; // 5 minutes

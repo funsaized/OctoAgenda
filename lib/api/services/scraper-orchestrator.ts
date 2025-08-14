@@ -2,27 +2,26 @@
  * Scraper Orchestrator Service
  * Coordinates all services to extract events and generate ICS files
  */
-
+import {
+  ExtractionContext,
+  batchExtractEvents,
+  validateExtraction,
+} from '@/lib/api/services/anthropic-ai';
+import { hasEventContent, preprocessHTML } from '@/lib/api/services/content-preprocessor';
+import { fetchHTML } from '@/lib/api/services/html-fetcher';
+import { generateICS, generateSingleEventICS } from '@/lib/api/services/ics-generator';
 import {
   CalendarEvent,
-  ProcessingOptions,
-  SourceConfiguration,
-  ScraperError,
   ErrorCode,
-  Result,
   ICSOptions,
+  ProcessingOptions,
+  Result,
   ScraperConfig,
+  ScraperError,
   ScraperResult,
+  SourceConfiguration,
 } from '@/lib/api/types/index';
-import { fetchHTML } from '@/lib/api/services/html-fetcher';
-import { preprocessHTML, hasEventContent } from '@/lib/api/services/content-preprocessor';
-import {
-  validateExtraction,
-  batchExtractEvents,
-  ExtractionContext,
-} from '@/lib/api/services/anthropic-ai';
 import type { Anthropic } from '@anthropic-ai/sdk';
-import { generateICS, generateSingleEventICS } from '@/lib/api/services/ics-generator';
 
 // Types are now imported from the types file
 

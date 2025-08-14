@@ -2,7 +2,6 @@
  * Content Preprocessor Service
  * Cleans and prepares HTML content for event extraction
  */
-
 import * as cheerio from 'cheerio';
 
 /**

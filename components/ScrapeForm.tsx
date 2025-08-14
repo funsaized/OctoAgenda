@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+
 import Image from 'next/image';
-import { useForm, type SubmitHandler } from 'react-hook-form';
-import 'bootstrap/dist/css/bootstrap.min.css';
+
 import { CalendarEvent } from '@/lib/api/types';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import { type SubmitHandler, useForm } from 'react-hook-form';
+
 import EventGrid from './EventGrid';
+import styles from './shared.module.css';
 
 type FormInputs = {
   url: string;
@@ -74,7 +78,7 @@ function ScrapeForm() {
       } else {
         const responseData = await res.json();
         console.log('Events extracted:', responseData);
-        
+
         // Store events for display
         if (responseData.events && Array.isArray(responseData.events)) {
           setEvents(responseData.events);
@@ -112,117 +116,6 @@ function ScrapeForm() {
 
   return (
     <>
-      {/* Animation styles */}
-      <style jsx>{`
-        @keyframes floatUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes wiggle {
-          0%,
-          100% {
-            transform: rotate(0deg);
-          }
-          25% {
-            transform: rotate(-3deg) translateY(-2px);
-          }
-          75% {
-            transform: rotate(3deg) translateY(-2px);
-          }
-        }
-
-        @keyframes bounce {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-8px);
-          }
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes shake {
-          0%,
-          100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-5px);
-          }
-          75% {
-            transform: translateX(5px);
-          }
-        }
-
-        .card-hover:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35) !important;
-        }
-
-        .mascot-hover:hover {
-          transform: scale(1.1);
-          animation: wiggleFast 0.5s ease-in-out infinite;
-        }
-
-        @keyframes wiggleFast {
-          0%,
-          100% {
-            transform: scale(1.1) rotate(0deg);
-          }
-          25% {
-            transform: scale(1.1) rotate(-5deg) translateY(-3px);
-          }
-          75% {
-            transform: scale(1.1) rotate(5deg) translateY(-3px);
-          }
-        }
-
-        .btn-hover:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .checkbox-container:hover {
-          background-color: #e9ecef !important;
-        }
-
-        .floating-input:focus {
-          border-color: #667eea !important;
-          box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25) !important;
-        }
-
-        .floating-input {
-          height: 3.5rem;
-          padding-top: 1.625rem;
-          padding-bottom: 0.625rem;
-          transition: all 0.3s ease;
-        }
-      `}</style>
-
       <div
         className="min-vh-100 d-flex align-items-start justify-content-center flex-column flex-lg-row"
         style={{
@@ -232,11 +125,10 @@ function ScrapeForm() {
         }}
       >
         <div
-          className="bg-white rounded-4 shadow-lg p-4 w-100 card-hover"
+          className={`bg-white rounded-4 shadow-lg p-4 w-100 ${styles.cardHover}`}
           style={{
             maxWidth: '480px',
-            animation: 'floatUp 0.5s ease-out',
-            transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+            animation: `${styles.floatUp} 0.5s ease-out`,
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }}
         >
@@ -246,10 +138,10 @@ function ScrapeForm() {
           >
             {/*FIXME: add back more wiggle when mouseover / click */}
             <Image
-              className="d-block rounded-2 mascot-hover"
+              className={`d-block rounded-2 ${styles.mascotHover}`}
               style={{
                 filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))',
-                animation: 'wiggle 3s ease-in-out infinite',
+                animation: `${styles.wiggle} 3s ease-in-out infinite`,
                 transition: 'transform 0.3s ease',
               }}
               src="/octopus-mascot.png"
@@ -264,7 +156,7 @@ function ScrapeForm() {
                 top: '-10px',
                 right: '-10px',
                 fontSize: '1.5rem',
-                animation: 'bounce 2s ease-in-out infinite',
+                animation: `${styles.bounce} 2s ease-in-out infinite`,
                 filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))',
               }}
             >
@@ -298,7 +190,7 @@ function ScrapeForm() {
           {submitSuccess && (
             <div
               className="p-3 bg-success-subtle border border-success-subtle rounded-3 text-success-emphasis mb-3"
-              style={{ animation: 'slideDown 0.3s ease' }}
+              style={{ animation: `${styles.slideDown} 0.3s ease` }}
             >
               🎉 Success! Your events have been added to your calendar! 📅✨
             </div>
@@ -307,7 +199,7 @@ function ScrapeForm() {
           {submitError && (
             <div
               className="p-3 bg-danger-subtle border border-danger-subtle rounded-3 text-danger-emphasis mb-3"
-              style={{ animation: 'slideDown 0.3s ease' }}
+              style={{ animation: `${styles.slideDown} 0.3s ease` }}
             >
               ⚠️ {submitError}
             </div>
@@ -318,7 +210,7 @@ function ScrapeForm() {
               <div className="form-floating position-relative">
                 <input
                   type="url"
-                  className={`form-control floating-input ${errors.url ? 'is-invalid' : ''}`}
+                  className={`form-control ${styles.floatingInput} ${errors.url ? 'is-invalid' : ''}`}
                   id="urlInput"
                   placeholder="https://example.com"
                   {...register('url', {
@@ -344,7 +236,7 @@ function ScrapeForm() {
                 {errors.url && (
                   <span
                     className="d-block text-danger mt-1"
-                    style={{ fontSize: '0.875rem', animation: 'shake 0.3s ease' }}
+                    style={{ fontSize: '0.875rem', animation: `${styles.shake} 0.3s ease` }}
                     role="alert"
                   >
                     {errors.url.message}
@@ -364,7 +256,7 @@ function ScrapeForm() {
             </div>
 
             <div
-              className="d-flex align-items-center mb-3 p-3 bg-light rounded-3 checkbox-container"
+              className={`d-flex align-items-center mb-3 p-3 bg-light rounded-3 ${styles.checkboxContainer}`}
               style={{ transition: 'background 0.3s ease' }}
             >
               <input
@@ -380,13 +272,13 @@ function ScrapeForm() {
                 style={{ cursor: 'pointer', userSelect: 'none' }}
                 htmlFor="icsCheck"
               >
-                📥 Export as ICS file for calendar import
+                📥 Export ICS file only
               </label>
             </div>
 
             <button
               type="submit"
-              className="btn btn-primary w-100 fw-medium rounded-3 position-relative overflow-hidden btn-hover"
+              className={`btn btn-primary w-100 fw-medium rounded-3 position-relative overflow-hidden ${styles.btnHover}`}
               style={{
                 padding: '0.75rem 1.5rem',
                 fontSize: '1.1rem',
@@ -406,7 +298,7 @@ function ScrapeForm() {
                       border: '2px solid rgba(255, 255, 255, 0.3)',
                       borderRadius: '50%',
                       borderTopColor: 'white',
-                      animation: 'spin 0.6s linear infinite',
+                      animation: `${styles.spin} 0.6s linear infinite`,
                     }}
                   ></span>
                   🔄 Processing your events...
@@ -423,7 +315,7 @@ function ScrapeForm() {
             className="bg-white rounded-4 shadow-lg overflow-hidden w-100"
             style={{
               maxWidth: '800px',
-              animation: 'floatUp 1s ease-out 1s both',
+              animation: `${styles.floatUp} 1s ease-out 1s both`,
             }}
           >
             <div
@@ -460,7 +352,7 @@ function ScrapeForm() {
                     border: '4px solid rgba(102, 126, 234, 0.2)',
                     borderRadius: '50%',
                     borderTopColor: '#667eea',
-                    animation: 'spin 1s linear infinite',
+                    animation: `${styles.spin} 1s linear infinite`,
                   }}
                 ></div>
                 <p className="m-0 fw-medium" style={{ color: '#667eea' }}>
@@ -470,11 +362,9 @@ function ScrapeForm() {
             </div>
           </div>
         )}
-        
+
         {/* Event Grid - Show events if available */}
-        {events.length > 0 && (
-          <EventGrid events={events} />
-        )}
+        {events.length > 0 && <EventGrid events={events} />}
       </div>
     </>
   );

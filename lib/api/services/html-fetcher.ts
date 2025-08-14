@@ -2,16 +2,15 @@
  * HTML Fetcher Service
  * Handles fetching HTML content with retry logic, caching, and error handling
  */
-
+import {
+  CacheConfiguration,
+  ErrorCode,
+  FetchOptions,
+  Result,
+  ScraperError,
+} from '@/lib/api/types/index';
 import fetch, { Response } from 'node-fetch';
 import pRetry from 'p-retry';
-import {
-  FetchOptions,
-  ScraperError,
-  ErrorCode,
-  Result,
-  CacheConfiguration,
-} from '@/lib/api/types/index';
 
 // Simple in-memory cache implementation
 interface CacheEntry {

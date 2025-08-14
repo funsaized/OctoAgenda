@@ -2,9 +2,8 @@
  * Cron job API endpoint
  * Handles scheduled scraping tasks
  */
-
-import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Configure runtime for Node.js compatibility
 export const maxDuration = 300; // 5 minutes

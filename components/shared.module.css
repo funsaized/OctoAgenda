@@ -1,0 +1,121 @@
+/* Shared hover effects for cards */
+.cardHover {
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.cardHover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Floating animations */
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Wiggle animations */
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg) translateY(-2px);
+  }
+  75% {
+    transform: rotate(3deg) translateY(-2px);
+  }
+}
+
+@keyframes wiggleFast {
+  0%,
+  100% {
+    transform: scale(1.1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.1) rotate(-5deg) translateY(-3px);
+  }
+  75% {
+    transform: scale(1.1) rotate(5deg) translateY(-3px);
+  }
+}
+
+/* Other animations */
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Mascot hover effect */
+.mascotHover:hover {
+  transform: scale(1.1);
+  animation: wiggleFast 0.5s ease-in-out infinite;
+}
+
+/* Button hover effect */
+.btnHover:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Checkbox container hover */
+.checkboxContainer:hover {
+  background-color: #e9ecef !important;
+}
+
+/* Floating input styles */
+.floatingInput:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25) !important;
+}
+
+.floatingInput {
+  height: 3.5rem;
+  padding-top: 1.625rem;
+  padding-bottom: 0.625rem;
+  transition: all 0.3s ease;
+}

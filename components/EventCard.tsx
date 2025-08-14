@@ -1,5 +1,8 @@
 import React from 'react';
+
 import { CalendarEvent } from '@/lib/api/types';
+
+import styles from './shared.module.css';
 
 interface EventCardProps {
   event: CalendarEvent;
@@ -9,39 +12,37 @@ interface EventCardProps {
 const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
-  
+
   // Format date components
   const day = startDate.getDate();
   const month = startDate.toLocaleDateString('en', { month: 'short' }).toUpperCase();
-  
+
   // Format time
-  const startTime = startDate.toLocaleTimeString('en', { 
-    hour: 'numeric', 
+  const startTime = startDate.toLocaleTimeString('en', {
+    hour: 'numeric',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
   });
-  const endTime = endDate.toLocaleTimeString('en', { 
-    hour: 'numeric', 
+  const endTime = endDate.toLocaleTimeString('en', {
+    hour: 'numeric',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
   });
-  
+
   // Truncate description if too long
-  const truncatedDescription = event.description.length > 120 
-    ? event.description.slice(0, 120) + '...' 
-    : event.description;
+  const truncatedDescription =
+    event.description.length > 120 ? event.description.slice(0, 120) + '...' : event.description;
 
   return (
-    <div 
-      className="card h-100 event-card card-hover position-relative overflow-hidden"
+    <div
+      className={`card h-100 event-card position-relative overflow-hidden ${styles.cardHover}`}
       style={{
-        animation: `floatUp 0.5s ease-out ${index * 0.1}s both`,
-        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+        animation: `${styles.floatUp} 0.5s ease-out ${index * 0.1}s both`,
         boxShadow: '0 10px 30px rgba(0, 0, 0, 0.15)',
       }}
     >
       {/* Octopus Background */}
-      <div 
+      <div
         className="position-absolute"
         style={{
           top: '10px',
@@ -56,9 +57,9 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
           zIndex: 1,
         }}
       />
-      
+
       {/* Calendar Date Header */}
-      <div 
+      <div
         className="card-header text-center py-3 position-relative"
         style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -68,22 +69,22 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
         }}
       >
         <div className="calendar-date">
-          <div 
+          <div
             className="day fw-bold"
-            style={{ 
-              fontSize: '1.75rem', 
+            style={{
+              fontSize: '1.75rem',
               lineHeight: '1',
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
             }}
           >
             {day}
           </div>
-          <div 
+          <div
             className="month fw-medium"
-            style={{ 
-              fontSize: '0.75rem', 
+            style={{
+              fontSize: '0.75rem',
               letterSpacing: '1px',
-              opacity: 0.9
+              opacity: 0.9,
             }}
           >
             {month}
@@ -93,24 +94,24 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
 
       {/* Event Content */}
       <div className="card-body d-flex flex-column position-relative" style={{ zIndex: 2 }}>
-        <h5 
+        <h5
           className="card-title fw-semibold mb-2"
-          style={{ 
+          style={{
             color: '#2c3e50',
             fontSize: '1.1rem',
-            lineHeight: '1.3'
+            lineHeight: '1.3',
           }}
         >
           {event.title}
         </h5>
 
         {/* Time Display */}
-        <div 
+        <div
           className="event-time d-flex align-items-center mb-2"
-          style={{ 
+          style={{
             color: '#667eea',
             fontSize: '0.9rem',
-            fontWeight: '500'
+            fontWeight: '500',
           }}
         >
           <span className="me-1">🕐</span>
@@ -125,11 +126,11 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
 
         {/* Location */}
         {event.location && (
-          <div 
+          <div
             className="event-location d-flex align-items-center mb-2"
-            style={{ 
+            style={{
               color: '#6c757d',
-              fontSize: '0.85rem'
+              fontSize: '0.85rem',
             }}
           >
             <span className="me-1">📍</span>
@@ -138,12 +139,12 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
         )}
 
         {/* Description */}
-        <p 
+        <p
           className="card-text flex-grow-1 mb-3"
-          style={{ 
+          style={{
             fontSize: '0.875rem',
             color: '#495057',
-            lineHeight: '1.4'
+            lineHeight: '1.4',
           }}
         >
           {truncatedDescription}
@@ -160,7 +161,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
                   backgroundColor: 'rgba(102, 126, 234, 0.1)',
                   color: '#667eea',
                   fontSize: '0.7rem',
-                  fontWeight: '500'
+                  fontWeight: '500',
                 }}
               >
                 {category}
@@ -173,7 +174,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
                   backgroundColor: 'rgba(102, 126, 234, 0.1)',
                   color: '#667eea',
                   fontSize: '0.7rem',
-                  fontWeight: '500'
+                  fontWeight: '500',
                 }}
               >
                 +{event.categories.length - 2}
@@ -185,16 +186,10 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
 
       {/* Footer */}
       {(event.organizer?.name || event.url) && (
-        <div 
-          className="card-footer bg-light border-0 py-2 position-relative"
-          style={{ zIndex: 2 }}
-        >
+        <div className="card-footer bg-light border-0 py-2 position-relative" style={{ zIndex: 2 }}>
           <div className="d-flex justify-content-between align-items-center">
             {event.organizer?.name && (
-              <small 
-                className="text-muted"
-                style={{ fontSize: '0.75rem' }}
-              >
+              <small className="text-muted" style={{ fontSize: '0.75rem' }}>
                 👤 {event.organizer.name}
               </small>
             )}
@@ -210,7 +205,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, index }) => {
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   color: 'white',
                   border: 'none',
-                  textDecoration: 'none'
+                  textDecoration: 'none',
                 }}
               >
                 Learn More
