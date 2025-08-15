@@ -538,6 +538,21 @@ export interface ScraperResult {
       estimatedCost: number;
     };
 
+    /** Enhanced processing metrics */
+    enhancedProcessing?: {
+      tokenReduction: number;
+      qualityScore: number;
+      eventContentRatio: number;
+      structuredEventsFound: number;
+      chunksProcessed: number;
+      processingStats: {
+        htmlAnalysisTime: number;
+        contentExtractionTime: number;
+        chunkingTime: number;
+        qualityAssessmentTime: number;
+      };
+    };
+
     /** Warnings */
     warnings: string[];
   };
