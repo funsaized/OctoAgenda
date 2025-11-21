@@ -7,8 +7,10 @@ import {
   batchExtractEvents,
   validateExtraction,
 } from '@/lib/api/services/anthropic-ai';
-import { hasEventContent, preprocessHTML } from '@/lib/api/services/content-preprocessor';
-import { enhancedPreprocessHTML, EnhancedProcessedContent } from '@/lib/api/services/enhanced-content-processor';
+import {
+  EnhancedProcessedContent,
+  enhancedPreprocessHTML,
+} from '@/lib/api/services/enhanced-content-processor';
 import { fetchHTML } from '@/lib/api/services/html-fetcher';
 import { generateICS, generateSingleEventICS } from '@/lib/api/services/ics-generator';
 import {
@@ -22,7 +24,9 @@ import {
   ScraperResult,
   SourceConfiguration,
 } from '@/lib/api/types/index';
+import { PROCESSING_CONSTANTS } from '@/lib/api/utils/config';
 import type { Anthropic } from '@anthropic-ai/sdk';
+import * as levenshtein from 'fast-levenshtein';
 
 // Types are now imported from the types file
 
@@ -30,7 +34,7 @@ import type { Anthropic } from '@anthropic-ai/sdk';
  * Default processing options
  */
 const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
-  batchSize: 5,
+  batchSize: PROCESSING_CONSTANTS.DEFAULT_BATCH_SIZE,
   retry: {
     maxAttempts: 3,
     initialDelay: 1000,
@@ -85,37 +89,42 @@ export async function scrapeEvents(
     // Step 2: Enhanced HTML Preprocessing
     console.log('Starting enhanced HTML preprocessing');
     let processedContent: EnhancedProcessedContent;
-    
+
     try {
       processedContent = await enhancedPreprocessHTML(html);
-      
+
       console.log(`✅ Enhanced preprocessing completed:`);
-      console.log(`  - Token reduction: ${(processedContent.metadata.tokenReduction * 100).toFixed(1)}%`);
-      console.log(`  - Quality score: ${(processedContent.qualityMetrics.overallQuality * 100).toFixed(1)}%`);
-      console.log(`  - Event content ratio: ${(processedContent.qualityMetrics.eventContentRatio * 100).toFixed(1)}%`);
+      console.log(
+        `  - Token reduction: ${(processedContent.metadata.tokenReduction * 100).toFixed(1)}%`
+      );
+      console.log(
+        `  - Quality score: ${(processedContent.qualityMetrics.overallQuality * 100).toFixed(1)}%`
+      );
+      console.log(
+        `  - Event content ratio: ${(processedContent.qualityMetrics.eventContentRatio * 100).toFixed(1)}%`
+      );
       console.log(`  - High-priority chunks: ${processedContent.prioritizedChunks.length}`);
-      
+
       // Quality checks
       if (processedContent.qualityMetrics.overallQuality < 0.3) {
         warnings.push('Low content quality detected - may affect extraction accuracy');
       }
-      
+
       if (processedContent.qualityMetrics.eventContentRatio < 0.1) {
         warnings.push('Very little event content detected in HTML');
       }
-      
+
       if (processedContent.prioritizedChunks.length === 0) {
         throw new ScraperError(
           'No relevant content chunks found after processing',
           ErrorCode.INVALID_HTML,
-          { 
+          {
             url: config.source.url,
-            qualityMetrics: processedContent.qualityMetrics 
+            qualityMetrics: processedContent.qualityMetrics,
           },
           false
         );
       }
-      
     } catch (error: any) {
       console.error('\n❌ ENHANCED PREPROCESSING FAILED');
       console.error('Error details:', {
@@ -123,76 +132,24 @@ export async function scrapeEvents(
         code: error.code,
         stack: error.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines
       });
-      
+
       if (error.details) {
         console.error('Additional context:', error.details);
       }
-      
-      console.log('\n🔄 FALLING BACK TO BASIC PROCESSING...');
-      
-      // Fallback to original processor
-      const basicProcessedContent = preprocessHTML(html);
-      warnings.push(`Enhanced processing failed (${error.message}), using basic processing mode`);
-      
-      // Convert to enhanced format for compatibility
-      processedContent = {
-        optimizedContent: basicProcessedContent.cleanedText,
-        prioritizedChunks: basicProcessedContent.chunks.map((chunk, index) => ({
-          content: chunk.content,
-          tokenCount: chunk.tokenCount,
-          relevanceScore: chunk.priority / 10,
-          eventScore: chunk.priority / 10,
-          contentType: chunk.context as any,
-          entities: {
-            dates: [],
-            locations: [],
-            organizations: [],
-            keywords: [],
-          },
-          sourceContext: {
-            htmlTag: 'div',
-            cssClasses: [],
-            isMainContent: true,
-            semanticRole: 'content',
-          },
-        })),
-        structuredEvents: basicProcessedContent.structuredData.map(event => ({
-          ...event,
-          source: event.source === 'regex' ? 'semantic-analysis' as const : event.source,
-          confidence: 0.7,
-        })),
-        qualityMetrics: {
-          overallQuality: 0.5,
-          informationDensity: 0.5,
-          eventContentRatio: 0.5,
-          temporalRichness: 0.3,
-          locationRichness: 0.3,
-          structureScore: 0.4,
-          boilerplateRatio: 0.5,
+
+      console.log('\n🔄 ENHANCED PROCESSING FAILED - NO FALLBACK AVAILABLE');
+      console.log('Enhanced processing is now the only processor. Re-throwing error...');
+
+      // Re-throw the error since there's no fallback processor
+      throw new ScraperError(
+        `HTML preprocessing failed: ${error.message}`,
+        ErrorCode.PARSE_ERROR,
+        {
+          url: config.source.url,
+          originalError: error.message,
         },
-        metadata: {
-          originalLength: html.length,
-          processedLength: basicProcessedContent.cleanedText.length,
-          tokenReduction: 0.2,
-          chunkCount: basicProcessedContent.chunks.length,
-          language: basicProcessedContent.metadata.language || 'en',
-          title: basicProcessedContent.metadata.title,
-          description: basicProcessedContent.metadata.description,
-          contentAreas: {
-            main: false,
-            article: false,
-            navigation: false,
-            sidebar: false,
-            footer: false,
-          },
-          processingStats: {
-            htmlAnalysisTime: 0,
-            contentExtractionTime: 0,
-            chunkingTime: 0,
-            qualityAssessmentTime: 0,
-          },
-        },
-      };
+        false
+      );
     }
 
     // Step 3: Extract events using AI
@@ -328,7 +285,7 @@ async function extractEventsFromContent(
         try {
           const startTime = new Date(structured.startDate);
           const endTime = structured.endDate ? new Date(structured.endDate) : new Date(startTime);
-          
+
           // If no end date provided, add 2 hours
           if (!structured.endDate) {
             endTime.setHours(endTime.getHours() + 2);
@@ -347,7 +304,9 @@ async function extractEventsFromContent(
           };
 
           allEvents.push(event);
-          console.log(`  ✅ Structured event: "${event.title}" (confidence: ${structured.confidence.toFixed(2)})`);
+          console.log(
+            `  ✅ Structured event: "${event.title}" (confidence: ${structured.confidence.toFixed(2)})`
+          );
         } catch (error) {
           console.error(`  ❌ Failed to parse structured event "${structured.title}":`, error);
         }
@@ -366,17 +325,24 @@ async function extractEventsFromContent(
 
     // Filter chunks with high event likelihood or relevance
     const highValueChunks = processedContent.prioritizedChunks
-      .filter(chunk => chunk.eventScore > 0.3 || chunk.relevanceScore > 0.5)
-      .slice(0, 15) // Limit to top 15 chunks to control token usage
-      .map(chunk => chunk.content);
+      .filter(
+        (chunk) =>
+          chunk.eventScore > PROCESSING_CONSTANTS.EVENT_CONFIDENCE_THRESHOLD ||
+          chunk.relevanceScore > 0.5
+      )
+      .slice(0, PROCESSING_CONSTANTS.MAX_CHUNKS_PER_BATCH) // Limit to top chunks to control token usage
+      .map((chunk) => chunk.content);
 
     if (highValueChunks.length > 0) {
-      console.log(`Processing ${highValueChunks.length} high-value content chunks for AI extraction`);
-      
+      console.log(
+        `Processing ${highValueChunks.length} high-value content chunks for AI extraction`
+      );
+
       // Log chunk quality info
-      const avgEventScore = processedContent.prioritizedChunks
-        .slice(0, highValueChunks.length)
-        .reduce((sum, chunk) => sum + chunk.eventScore, 0) / highValueChunks.length;
+      const avgEventScore =
+        processedContent.prioritizedChunks
+          .slice(0, highValueChunks.length)
+          .reduce((sum, chunk) => sum + chunk.eventScore, 0) / highValueChunks.length;
       console.log(`  Average event score: ${(avgEventScore * 100).toFixed(1)}%`);
 
       try {
@@ -385,20 +351,22 @@ async function extractEventsFromContent(
           highValueChunks,
           context,
           processing.ai,
-          { concurrency: Math.min(processing.batchSize, 3) } // Limit concurrency for better reliability
+          { concurrency: Math.min(processing.batchSize, PROCESSING_CONSTANTS.AI_CONCURRENCY) } // Limit concurrency for better reliability
         );
 
         allEvents.push(...aiEvents);
-        console.log(`  ✅ AI extracted ${aiEvents.length} events from ${highValueChunks.length} chunks`);
+        console.log(
+          `  ✅ AI extracted ${aiEvents.length} events from ${highValueChunks.length} chunks`
+        );
       } catch (aiError: any) {
         console.error('  ❌ AI extraction failed:', aiError.message);
         throw new ScraperError(
           `AI event extraction failed: ${aiError.message}`,
           ErrorCode.AI_API_ERROR,
-          { 
+          {
             url: source.url,
             chunks: highValueChunks.length,
-            qualityMetrics: processedContent.qualityMetrics
+            qualityMetrics: processedContent.qualityMetrics,
           },
           true
         );
@@ -427,7 +395,7 @@ function enhancedDeduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
     for (const existingEvent of unique) {
       if (isEventDuplicate(event, existingEvent)) {
         isDuplicate = true;
-        
+
         // Keep the event with more complete information
         if (getEventCompleteness(event) > getEventCompleteness(existingEvent)) {
           const index = unique.indexOf(existingEvent);
@@ -452,7 +420,8 @@ function isEventDuplicate(event1: CalendarEvent, event2: CalendarEvent): boolean
   // Exact title and time match
   if (
     event1.title.toLowerCase() === event2.title.toLowerCase() &&
-    Math.abs(event1.startTime.getTime() - event2.startTime.getTime()) < 60000 // Within 1 minute
+    Math.abs(event1.startTime.getTime() - event2.startTime.getTime()) <
+      PROCESSING_CONSTANTS.TIME_MATCH_THRESHOLD_MS // Within 1 minute
   ) {
     return true;
   }
@@ -462,11 +431,10 @@ function isEventDuplicate(event1: CalendarEvent, event2: CalendarEvent): boolean
     event1.title.toLowerCase(),
     event2.title.toLowerCase()
   );
-  
-  const sameDate = 
-    event1.startTime.toDateString() === event2.startTime.toDateString();
 
-  if (titleSimilarity > 0.8 && sameDate) {
+  const sameDate = event1.startTime.toDateString() === event2.startTime.toDateString();
+
+  if (titleSimilarity > PROCESSING_CONSTANTS.STRING_SIMILARITY_THRESHOLD && sameDate) {
     return true;
   }
 
@@ -474,45 +442,14 @@ function isEventDuplicate(event1: CalendarEvent, event2: CalendarEvent): boolean
 }
 
 /**
- * Calculate string similarity using simple edit distance
+ * Calculate string similarity using Levenshtein distance
  */
 function calculateStringSimilarity(str1: string, str2: string): number {
   const maxLength = Math.max(str1.length, str2.length);
   if (maxLength === 0) return 1;
-  
-  const distance = levenshteinDistance(str1, str2);
+
+  const distance = levenshtein.get(str1, str2);
   return 1 - distance / maxLength;
-}
-
-/**
- * Calculate Levenshtein distance
- */
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix = [];
-
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-
-  return matrix[str2.length][str1.length];
 }
 
 /**
@@ -520,22 +457,15 @@ function levenshteinDistance(str1: string, str2: string): number {
  */
 function getEventCompleteness(event: CalendarEvent): number {
   let score = 0;
-  
+
   if (event.title?.trim()) score += 2;
   if (event.description?.trim()) score += 1;
   if (event.location?.trim() && event.location !== 'TBD') score += 1;
   if (event.organizer?.name?.trim()) score += 1;
   if (event.url?.trim()) score += 1;
   if (event.categories?.length) score += 1;
-  
-  return score;
-}
 
-/**
- * Legacy deduplication function for backward compatibility
- */
-function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
-  return enhancedDeduplicateEvents(events);
+  return score;
 }
 
 /**

@@ -1,6 +1,53 @@
 import { ScraperConfig } from '@/lib/api/types/index';
 
 /**
+ * Processing constants used throughout the application
+ */
+export const PROCESSING_CONSTANTS = {
+  // Token estimation
+  CHARS_PER_TOKEN: 4,
+  AVG_CHARS_PER_TOKEN: 4,
+
+  // Chunking configuration
+  CHUNK_SIZE_TOKENS: 800,
+  CHUNK_OVERLAP_TOKENS: 100,
+  MAX_CHUNKS_PER_BATCH: 15,
+  MAX_TOKENS_PER_CHUNK: 3000,
+
+  // Content length thresholds
+  MIN_CONTENT_LENGTH: 20,
+  MAX_CONTENT_LENGTH: 5000,
+  MIN_BLOCK_LENGTH: 20,
+  MAX_BLOCK_LENGTH: 3000,
+
+  // Quality thresholds
+  QUALITY_THRESHOLD: 0.3,
+  MIN_RELEVANCE_THRESHOLD: 0.1,
+  EVENT_CONFIDENCE_THRESHOLD: 0.3,
+  HIGH_QUALITY_SCORE_THRESHOLD: 0.3,
+
+  // Scoring weights
+  EVENT_SCORE_WEIGHT: 0.6,
+  RELEVANCE_SCORE_WEIGHT: 0.4,
+
+  // Batch processing
+  DEFAULT_BATCH_SIZE: 5,
+  MAX_PRIORITY_CHUNKS: 20,
+  MAX_EVENT_CONTAINERS: 10,
+  AI_CONCURRENCY: 3,
+
+  // Deduplication
+  STRING_SIMILARITY_THRESHOLD: 0.8,
+  TIME_MATCH_THRESHOLD_MS: 60000, // 1 minute
+
+  // Default durations
+  DEFAULT_EVENT_DURATION_HOURS: 2,
+
+  // Cache limits
+  MAX_BLOCKS_PER_PAGE: 50,
+} as const;
+
+/**
  * Validate and transform request body into scraper configuration
  */
 export function validateConfig(body: unknown): ScraperConfig {

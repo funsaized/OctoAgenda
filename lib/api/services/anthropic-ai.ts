@@ -3,6 +3,7 @@
  * Uses Claude 3 Haiku for event extraction from HTML content
  */
 import { AIConfiguration, CalendarEvent, ErrorCode, ScraperError } from '@/lib/api/types/index';
+import { PROCESSING_CONSTANTS } from '@/lib/api/utils/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { Allow, parse as parsePartialJSON } from 'partial-json';
 
@@ -715,7 +716,7 @@ export function estimateCost(content: string): number {
   // Input: $0.25 per million tokens
   // Output: $1.25 per million tokens
 
-  const estimatedInputTokens = Math.ceil(content.length / 4);
+  const estimatedInputTokens = Math.ceil(content.length / PROCESSING_CONSTANTS.CHARS_PER_TOKEN);
   const estimatedOutputTokens = 500; // Estimate for Haiku responses
 
   const inputCost = (estimatedInputTokens / 1_000_000) * 0.25;

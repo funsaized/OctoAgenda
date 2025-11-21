@@ -3,6 +3,7 @@
  * Modern, robust HTML parsing and content extraction optimized for event information
  * Uses semantic analysis, intelligent chunking, and token optimization
  */
+import { PROCESSING_CONSTANTS } from '@/lib/api/utils/config';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 
@@ -553,8 +554,8 @@ export class EnhancedContentProcessor {
     originalHtml: cheerio.CheerioAPI
   ): Promise<SemanticChunk[]> {
     const chunks: SemanticChunk[] = [];
-    const maxTokensPerChunk = 800; // Optimized for most LLMs
-    const overlapTokens = 100;
+    const maxTokensPerChunk = PROCESSING_CONSTANTS.CHUNK_SIZE_TOKENS;
+    const overlapTokens = PROCESSING_CONSTANTS.CHUNK_OVERLAP_TOKENS;
 
     // Extract text blocks with semantic context
     const textBlocks = this.extractTextBlocks(cleanedHtml);
@@ -570,7 +571,7 @@ export class EnhancedContentProcessor {
         const chunk = await this.createSemanticChunk(markdown, block, tokenCount);
 
         // More lenient filtering for debugging - accept any chunk with some relevance
-        const minRelevanceThreshold = 0.1;
+        const minRelevanceThreshold = PROCESSING_CONSTANTS.MIN_RELEVANCE_THRESHOLD;
 
         if (chunk.relevanceScore >= minRelevanceThreshold) {
           chunks.push(chunk);
@@ -593,7 +594,7 @@ export class EnhancedContentProcessor {
 
           const chunk = await this.createSemanticChunk(chunkText, block, chunkTokens);
 
-          const minRelevanceThreshold = 0.1;
+          const minRelevanceThreshold = PROCESSING_CONSTANTS.MIN_RELEVANCE_THRESHOLD;
 
           if (chunk.relevanceScore >= minRelevanceThreshold) {
             chunks.push(chunk);
@@ -637,7 +638,10 @@ export class EnhancedContentProcessor {
       const text = $el.text().trim();
 
       // Filter by content length and quality
-      if (text.length < 20 || text.length > 3000) {
+      if (
+        text.length < PROCESSING_CONSTANTS.MIN_BLOCK_LENGTH ||
+        text.length > PROCESSING_CONSTANTS.MAX_BLOCK_LENGTH
+      ) {
         filteredByLength++;
         return;
       }
@@ -687,7 +691,7 @@ export class EnhancedContentProcessor {
     });
 
     // Limit to top blocks
-    const finalBlocks = sortedBlocks.slice(0, 50);
+    const finalBlocks = sortedBlocks.slice(0, PROCESSING_CONSTANTS.MAX_BLOCKS_PER_PAGE);
 
     console.log(`         - After sorting & limiting: ${finalBlocks.length}`);
 
@@ -900,14 +904,16 @@ export class EnhancedContentProcessor {
     // Calculate combined scores
     const scoredChunks = chunks.map((chunk) => ({
       ...chunk,
-      _combinedScore: chunk.eventScore * 0.6 + chunk.relevanceScore * 0.4,
+      _combinedScore:
+        chunk.eventScore * PROCESSING_CONSTANTS.EVENT_SCORE_WEIGHT +
+        chunk.relevanceScore * PROCESSING_CONSTANTS.RELEVANCE_SCORE_WEIGHT,
     }));
 
     // Sort by combined score
     const sorted = scoredChunks.sort((a, b) => b._combinedScore - a._combinedScore);
 
     // Apply quality threshold filter
-    const qualityThreshold = 0.3;
+    const qualityThreshold = PROCESSING_CONSTANTS.QUALITY_THRESHOLD;
     const highQualityChunks = sorted.filter((chunk) => chunk._combinedScore >= qualityThreshold);
     const lowQualityChunks = sorted.filter((chunk) => chunk._combinedScore < qualityThreshold);
 
@@ -930,7 +936,7 @@ export class EnhancedContentProcessor {
     }
 
     // Limit to top chunks
-    const maxChunks = 20;
+    const maxChunks = PROCESSING_CONSTANTS.MAX_PRIORITY_CHUNKS;
     const finalChunks = highQualityChunks.slice(0, maxChunks);
 
     console.log(
@@ -998,7 +1004,10 @@ export class EnhancedContentProcessor {
     console.log(`      ⚡ Optimizing ${chunks.length} chunks for token efficiency...`);
 
     // Filter for high-priority chunks
-    const highPriorityChunks = chunks.filter((c) => c.eventScore > 0.3 || c.relevanceScore > 0.5);
+    const highPriorityChunks = chunks.filter(
+      (c) =>
+        c.eventScore > PROCESSING_CONSTANTS.EVENT_CONFIDENCE_THRESHOLD || c.relevanceScore > 0.5
+    );
 
     console.log(`         - High-priority chunks after filtering: ${highPriorityChunks.length}`);
 
@@ -1018,7 +1027,7 @@ export class EnhancedContentProcessor {
     }
 
     // Limit to top chunks
-    const finalChunks = highPriorityChunks.slice(0, 15);
+    const finalChunks = highPriorityChunks.slice(0, PROCESSING_CONSTANTS.MAX_CHUNKS_PER_BATCH);
     console.log(`         📦 Final optimization: ${finalChunks.length} chunks selected (max: 15)`);
 
     if (finalChunks.length > 0) {
@@ -1200,8 +1209,10 @@ export class EnhancedContentProcessor {
   }
 
   private calculateTokenReduction(originalHtml: string, optimizedContent: string): number {
-    const originalTokens = Math.ceil(originalHtml.length / 4);
-    const optimizedTokens = Math.ceil(optimizedContent.length / 4);
+    const originalTokens = Math.ceil(originalHtml.length / PROCESSING_CONSTANTS.CHARS_PER_TOKEN);
+    const optimizedTokens = Math.ceil(
+      optimizedContent.length / PROCESSING_CONSTANTS.CHARS_PER_TOKEN
+    );
     return Math.max(0, (originalTokens - optimizedTokens) / originalTokens);
   }
 }
