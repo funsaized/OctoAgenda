@@ -269,7 +269,7 @@ export interface AIConfiguration {
   apiKey: string;
 
   /** Model to use */
-  model: 'claude-3-haiku-20240307' | 'claude-3-sonnet-20240229' | 'claude-3-5-sonnet-20241022';
+  model: 'claude-haiku-4-5-20251001';
 
   /** Maximum tokens for response */
   maxTokens?: number;
@@ -530,13 +530,6 @@ export interface ScraperResult {
 
     /** Processing time in ms */
     processingTime: number;
-
-    /** AI token usage */
-    tokenUsage?: {
-      input: number;
-      output: number;
-      estimatedCost: number;
-    };
 
     /** Warnings */
     warnings: string[];

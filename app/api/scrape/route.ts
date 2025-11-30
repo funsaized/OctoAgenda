@@ -1,86 +1,85 @@
 /**
- * Main scraping API endpoint
- * Handles HTTP requests to scrape events and generate ICS files
+ * Unified Streaming Scrape API endpoint
+ * Real-time event extraction with Server-Sent Events
  */
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createAnthropicClient } from '@/lib/api/services/anthropic-ai';
-import { initializeCache } from '@/lib/api/services/html-fetcher';
-import { getICSHeaders } from '@/lib/api/services/ics-generator';
-import { scrapeEvents } from '@/lib/api/services/scraper-orchestrator';
-import { ScraperConfig } from '@/lib/api/types/index';
-import { ErrorCode, ScraperError } from '@/lib/api/types/index';
+import { streamScrapeEvents } from '@/lib/api/services/scraper-orchestrator';
+import { ErrorCode, ScraperConfig, ScraperError } from '@/lib/api/types/index';
 import { validateConfig } from '@/lib/api/utils/config';
 import type { Anthropic } from '@anthropic-ai/sdk';
 
-// Configure runtime for Node.js compatibility
 export const maxDuration = 300; // 5 minutes
 
 /**
- * Create Anthropic client for this handler invocation
+ * Create Anthropic client
  */
 function createClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new ScraperError(
-      'ANTHROPIC_API_KEY environment variable is not configured',
+      'ANTHROPIC_API_KEY not configured',
       ErrorCode.CONFIGURATION_ERROR,
-      { message: 'AI service configuration is required for event extraction' },
+      { message: 'AI service configuration required' },
       false
     );
   }
 
   return createAnthropicClient({
     apiKey,
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-haiku-4-5-20251001',
     maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
   });
 }
 
 /**
- * POST handler for scraping requests
+ * POST - Stream scraping with real-time updates
  */
 export async function POST(request: NextRequest) {
-  // Initialize cache
-  initializeCache({
-    enabled: true,
-    ttl: parseInt(process.env.CACHE_TTL || '3600000', 10),
-    maxSize: parseInt(process.env.CACHE_MAX_SIZE || '50', 10),
-  });
-
   try {
-    // Extract config from request
     const body = await request.json();
     const config: ScraperConfig = validateConfig(body);
 
-    // Create Anthropic client
-    const anthropicClient = createClient();
+    const encoder = new TextEncoder();
+    const stream = new TransformStream();
+    const writer = stream.writable.getWriter();
 
-    // Perform scraping
-    const { events, icsContent, metadata } = await scrapeEvents(config, anthropicClient);
+    // Start async processing
+    (async () => {
+      try {
+        const anthropicClient = createClient();
 
-    // Determine response type
-    const acceptHeader = request.headers.get('accept');
-    const preferICS = acceptHeader?.includes('text/calendar');
+        // Stream all updates to client
+        for await (const update of streamScrapeEvents(config, anthropicClient)) {
+          const message = JSON.stringify(update);
+          await writer.write(encoder.encode(`data: ${message}\n\n`));
+        }
+      } catch (error) {
+        console.error('Streaming error:', error);
 
-    if (preferICS && icsContent) {
-      // Return ICS file
-      const headers = new Headers(getICSHeaders(config.ics?.calendarName || 'Scraped Events'));
-      return new NextResponse(icsContent, {
-        status: 200,
-        headers,
-      });
-    }
+        const errorMessage = JSON.stringify({
+          type: 'error',
+          data: {
+            code: error instanceof ScraperError ? error.code : ErrorCode.INTERNAL_ERROR,
+            message: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+        await writer.write(encoder.encode(`data: ${errorMessage}\n\n`));
+      } finally {
+        await writer.close();
+      }
+    })();
 
-    // Return JSON response
-    return NextResponse.json({
-      success: true,
-      metadata,
-      events,
-      icsContent,
+    return new NextResponse(stream.readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
     });
   } catch (error) {
-    console.error('Scraping error:', error);
+    console.error('Stream setup error:', error);
 
     if (error instanceof ScraperError) {
       return NextResponse.json(
@@ -97,13 +96,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generic error
     return NextResponse.json(
       {
         success: false,
         error: {
           code: ErrorCode.INTERNAL_ERROR,
-          message: 'An unexpected error occurred',
+          message: 'Failed to initialize streaming',
           retryable: false,
         },
       },
@@ -113,21 +111,31 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET handler - returns API information
+ * GET - API information
  */
 export async function GET() {
   return NextResponse.json({
-    service: 'Event Scraper API',
-    version: '1.0.0',
+    service: 'Unified Streaming Event Scraper',
+    version: '2.0.0',
+    description: 'Real-time event extraction with SSE streaming',
+    model: 'claude-haiku-4-5-20251001',
+    features: [
+      'Server-Sent Events (SSE) streaming',
+      'Real-time event extraction',
+      'Automatic continuation on token limits',
+      '64K token output support',
+      'Duplicate detection',
+      'Auto-retry on overload',
+    ],
     endpoints: {
       POST: {
-        description: 'Scrape events from a URL and generate ICS file',
-        parameters: {
-          url: 'Source URL to scrape',
-          batchSize: 'Number of events to process per batch (optional)',
-          retryAttempts: 'Number of retry attempts for failed requests (optional)',
-          timezone: 'Target timezone for events (optional)',
-          calendarName: 'Name for the generated calendar (optional)',
+        description: 'Stream events in real-time as they are extracted',
+        contentType: 'text/event-stream',
+        eventTypes: {
+          status: 'Progress messages',
+          event: 'Individual calendar event',
+          complete: 'Final result with ICS content',
+          error: 'Error information',
         },
       },
     },

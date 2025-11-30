@@ -1,35 +1,30 @@
 /**
- * Scraper Orchestrator Service
- * Coordinates all services to extract events and generate ICS files
+ * Scraper Orchestrator Service - STREAMING VERSION
+ * Coordinates all services to extract events and generate ICS files with real-time streaming
  */
 import {
   ExtractionContext,
-  batchExtractEvents,
+  streamExtractEvents,
   validateExtraction,
 } from '@/lib/api/services/anthropic-ai';
-import { hasEventContent, preprocessHTML } from '@/lib/api/services/content-preprocessor';
-import { fetchHTML } from '@/lib/api/services/html-fetcher';
+import { scrapeWithFirecrawl } from '@/lib/api/services/firecrawl-service';
 import { generateICS, generateSingleEventICS } from '@/lib/api/services/ics-generator';
 import {
   CalendarEvent,
   ErrorCode,
-  ICSOptions,
   ProcessingOptions,
-  Result,
   ScraperConfig,
   ScraperError,
   ScraperResult,
-  SourceConfiguration,
 } from '@/lib/api/types/index';
+import { PROCESSING_CONSTANTS } from '@/lib/api/utils/config';
 import type { Anthropic } from '@anthropic-ai/sdk';
-
-// Types are now imported from the types file
 
 /**
  * Default processing options
  */
 const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
-  batchSize: 5,
+  batchSize: PROCESSING_CONSTANTS.DEFAULT_BATCH_SIZE,
   retry: {
     maxAttempts: 3,
     initialDelay: 1000,
@@ -46,139 +41,107 @@ const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
   },
   ai: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-haiku-4-5-20251001',
     maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
   },
 };
 
 /**
- * Main scraper function
+ * Stream scraping events with real-time updates
  */
-export async function scrapeEvents(
+export async function* streamScrapeEvents(
   config: ScraperConfig,
   anthropicClient: Anthropic
-): Promise<ScraperResult> {
+): AsyncGenerator<{ type: 'event' | 'status' | 'complete'; data: any }, void, unknown> {
   const startTime = Date.now();
   const warnings: string[] = [];
   const processing = { ...DEFAULT_PROCESSING_OPTIONS, ...config.processing };
+  const allEvents: CalendarEvent[] = [];
 
   try {
-    // Step 1: Fetch HTML
-    console.log(`Fetching HTML from ${config.source.url}`);
-    const html = await fetchHTML(config.source.url, {
-      headers: config.source.headers,
-      userAgent: config.source.userAgent,
+    // Step 1: Scrape with Firecrawl
+    yield { type: 'status', data: { message: '🔥 Scraping page with Firecrawl...' } };
+
+    const firecrawlResult = await scrapeWithFirecrawl(config.source.url, {
+      formats: ['markdown'],
       timeout: config.source.timeout,
-      useCache: processing.cache.enabled,
     });
 
-    if (!html) {
-      throw new ScraperError(
-        'No HTML content received',
-        ErrorCode.INVALID_HTML,
-        { url: config.source.url },
-        false
-      );
+    yield {
+      type: 'status',
+      data: {
+        message: `✅ Page scraped (${firecrawlResult.markdown.length.toLocaleString()} chars)`,
+      },
+    };
+
+    // Step 2: Extract context
+    const context: ExtractionContext = {
+      sourceUrl: config.source.url,
+      timezoneHint: processing.timezone.default,
+      currentDate: new Date(),
+      language: firecrawlResult.metadata.language,
+    };
+
+    // Step 3: Stream events from AI
+    yield { type: 'status', data: { message: '🤖 Extracting events with AI...' } };
+
+    // Process entire markdown content at once with streaming
+    for await (const event of streamExtractEvents(
+      anthropicClient,
+      firecrawlResult.markdown,
+      context,
+      processing.ai
+    )) {
+      allEvents.push(event);
+      yield { type: 'event', data: event };
     }
 
-    // Step 2: Preprocess HTML
-    console.log('Starting preprocess HTML content');
-    const processedContent = preprocessHTML(html);
+    yield {
+      type: 'status',
+      data: { message: `✅ Extracted ${allEvents.length} events` },
+    };
 
-    if (!hasEventContent(processedContent)) {
-      warnings.push('No event content detected in HTML');
-    }
+    // Step 4: Validate
+    yield { type: 'status', data: { message: '🔍 Validating events...' } };
 
-    // Step 3: Extract events using AI
-    console.log('\n=== AI EXTRACTION STEP ===');
-    console.log('Starting extracting events with AI');
-    let events: CalendarEvent[] = [];
-    try {
-      events = await extractEventsFromContent(
-        processedContent,
-        config.source,
-        processing,
-        anthropicClient
-      );
-      console.log(`AI extraction successful: ${events.length} events extracted`);
-    } catch (extractionError: any) {
-      console.log(`AI extraction error: ${extractionError.message}`);
-      console.log('Extraction error details:', extractionError);
-      // Re-throw the error since this is a critical failure
-      throw extractionError;
-    }
+    const validation = validateExtraction(allEvents);
 
-    // Step 4: Validate extracted events
-    console.log(`\n=== VALIDATION STEP ===`);
-    console.log(`Events to validate: ${events.length}`);
-    if (events.length > 0) {
-      console.log('Sample events for validation:');
-      events.slice(0, 3).forEach((event, idx) => {
-        console.log(`  ${idx + 1}. \"${event.title}\" - ${event.startTime.toISOString()}`);
-      });
-    }
-
-    const validation = validateExtraction(events);
-    console.log(`Validation result: ${validation.valid ? 'VALID' : 'INVALID'}`);
-    console.log(`Valid events: ${validation.validatedEvents.length}`);
-    console.log(`Invalid events: ${validation.invalidEvents.length}`);
-    console.log(`Validation errors: ${validation.errors.length}`);
-
-    if (!validation.valid) {
-      console.log('Validation errors:');
-      validation.errors.forEach((error, idx) => {
-        console.log(
-          `  ${idx + 1}. ${error.message} (event ${error.eventIndex}, field: ${error.field})`
-        );
-      });
+    if (validation.errors.length > 0) {
       warnings.push(...validation.errors.map((e) => e.message));
     }
 
-    // Step 5: Generate ICS files
+    // Step 5: Generate ICS (only full calendar file, no individual files)
+    yield { type: 'status', data: { message: '📅 Generating calendar file...' } };
+
     let icsContent: string | undefined;
-    let individualICS: Map<string, string> | undefined;
 
     if (validation.validatedEvents.length > 0) {
-      console.log(`Generating ICS files for ${validation.validatedEvents.length} events`);
-
-      try {
-        // Generate combined ICS
-        console.log('Generating combined ICS file...');
-        icsContent = generateICS(validation.validatedEvents, config.ics);
-        console.log('Combined ICS generated successfully');
-
-        // Generate individual ICS files if requested
-        if (config.ics?.method === 'REQUEST') {
-          console.log('Generating individual ICS files...');
-          individualICS = new Map();
-          for (const event of validation.validatedEvents) {
-            const eventICS = generateSingleEventICS(event, config.ics);
-            individualICS.set(event.title, eventICS);
-          }
-          console.log(`Generated ${individualICS.size} individual ICS files`);
-        }
-      } catch (icsError: any) {
-        console.error('ICS generation error:', icsError);
-        throw icsError;
-      }
-    } else {
-      console.warn('No valid events to generate ICS for');
+      icsContent = generateICS(validation.validatedEvents, config.ics);
     }
 
     const processingTime = Date.now() - startTime;
 
-    return {
-      events: validation.validatedEvents,
-      icsContent,
-      individualICS,
-      metadata: {
-        totalEvents: events.length,
-        processedEvents: validation.validatedEvents.length,
-        failedEvents: validation.invalidEvents.length,
-        processingTime,
-        warnings,
-      },
+    console.log(`\n=== SENDING COMPLETE EVENT ===`);
+    console.log(`ICS content length: ${icsContent?.length || 0} chars`);
+    console.log(`Total events: ${validation.validatedEvents.length}`);
+
+    // Final result
+    yield {
+      type: 'complete',
+      data: {
+        events: validation.validatedEvents,
+        icsContent,
+        metadata: {
+          totalEvents: allEvents.length,
+          processedEvents: validation.validatedEvents.length,
+          failedEvents: validation.invalidEvents.length,
+          processingTime,
+          warnings,
+        },
+      } as ScraperResult,
     };
+
+    console.log(`✅ Complete event sent`);
   } catch (error) {
     if (error instanceof ScraperError) {
       throw error;
@@ -189,135 +152,67 @@ export async function scrapeEvents(
 }
 
 /**
- * Extract events from processed content
+ * Non-streaming scraper (backwards compatibility)
  */
-async function extractEventsFromContent(
-  processedContent: any,
-  source: SourceConfiguration,
-  processing: ProcessingOptions,
-  client: Anthropic
-): Promise<CalendarEvent[]> {
-  const allEvents: CalendarEvent[] = [];
-
-  // FIXME: This is adding a nonsensical event w/ entire JSON
-  // First, add any structured data events
-  // if (processedContent.structuredData.length > 0) {
-  //   console.log(`Found ${processedContent.structuredData.length} events from structured data`);
-
-  //   for (const structured of processedContent.structuredData) {
-  //     if (structured.title && structured.datetime) {
-  //       try {
-  //         const event: CalendarEvent = {
-  //           title: structured.title,
-  //           startTime: new Date(structured.datetime),
-  //           endTime: new Date(structured.datetime),
-  //           location: structured.location || 'TBD',
-  //           description: structured.description || '',
-  //           timezone: processing.timezone.default
-  //         };
-
-  //         // Add 2 hours to end time if not specified
-  //         event.endTime.setHours(event.endTime.getHours() + 2);
-
-  //         allEvents.push(event);
-  //       } catch (error) {
-  //         console.error('Failed to parse structured event:', error);
-  //       }
-  //     }
-  //   }
-  // }
-
-  // Then, use AI for remaining content
-  if (processedContent.chunks.length > 0) {
-    const context: ExtractionContext = {
-      sourceUrl: source.url,
-      timezoneHint: processing.timezone.default,
-      currentDate: new Date(),
-      language: processedContent.metadata.language,
-    };
-
-    // Extract from high-priority chunks
-    const highPriorityChunks = processedContent.chunks
-      .filter((c: any) => c.priority >= 5)
-      .map((c: any) => c.content);
-
-    if (highPriorityChunks.length > 0) {
-      console.log(`Processing ${highPriorityChunks.length} high-priority content chunks`);
-
-      const aiEvents = await batchExtractEvents(
-        client,
-        highPriorityChunks,
-        context,
-        processing.ai,
-        { concurrency: processing.batchSize }
-      );
-
-      allEvents.push(...aiEvents);
-    }
-  }
-
-  // Deduplicate events
-  const uniqueEvents = deduplicateEvents(allEvents);
-
-  return uniqueEvents;
-}
-
-/**
- * Deduplicate events based on title and start time
- */
-function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
-  const seen = new Set<string>();
-  const unique: CalendarEvent[] = [];
-
-  for (const event of events) {
-    const key = `${event.title.toLowerCase()}-${event.startTime.toISOString()}`;
-
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(event);
-    }
-  }
-
-  return unique;
-}
-
-/**
- * Monitor scraping operation
- */
-export async function monitoredScrape(
+export async function scrapeEvents(
   config: ScraperConfig,
-  onProgress: ((message: string) => void) | undefined,
   anthropicClient: Anthropic
 ): Promise<ScraperResult> {
-  const notify = (msg: string) => {
-    console.log(msg);
-    onProgress?.(msg);
-  };
+  let result: ScraperResult | null = null;
 
-  notify('Starting scrape operation');
-
-  try {
-    notify(`Fetching ${config.source.url}`);
-    const result = await scrapeEvents(config, anthropicClient);
-
-    notify(`Successfully extracted ${result.events.length} events`);
-
-    if (result.metadata.warnings.length > 0) {
-      notify(`Warnings: ${result.metadata.warnings.join(', ')}`);
+  for await (const update of streamScrapeEvents(config, anthropicClient)) {
+    if (update.type === 'complete') {
+      result = update.data;
     }
-
-    return result;
-  } catch (error) {
-    notify(`Error: ${error}`);
-    throw error;
   }
+
+  if (!result) {
+    throw new ScraperError(
+      'Scraping completed without result',
+      ErrorCode.INTERNAL_ERROR,
+      {},
+      false
+    );
+  }
+
+  return result;
 }
 
-// validateConfig is now in utils/config.ts
+/**
+ * Chunk markdown content by paragraphs (keeping for backwards compatibility)
+ */
+function chunkMarkdown(markdown: string, maxTokensPerChunk: number = 5000): string[] {
+  const chunks: string[] = [];
+  const paragraphs = markdown
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  let currentChunk: string[] = [];
+  let currentTokens = 0;
+
+  for (const paragraph of paragraphs) {
+    const paragraphTokens = Math.ceil(paragraph.length / PROCESSING_CONSTANTS.CHARS_PER_TOKEN);
+
+    if (currentTokens + paragraphTokens > maxTokensPerChunk && currentChunk.length > 0) {
+      chunks.push(currentChunk.join('\n\n'));
+      currentChunk = [paragraph];
+      currentTokens = paragraphTokens;
+    } else {
+      currentChunk.push(paragraph);
+      currentTokens += paragraphTokens;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join('\n\n'));
+  }
+
+  return chunks;
+}
 
 /**
  * Create scraper config from environment variables
- * (used on CRON)
  */
 export function createConfigFromEnv(): ScraperConfig {
   return {
@@ -348,7 +243,7 @@ export function createConfigFromEnv(): ScraperConfig {
       },
       ai: {
         apiKey: process.env.ANTHROPIC_API_KEY || '',
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
       },
     },
     ics: {
