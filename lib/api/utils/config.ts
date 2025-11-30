@@ -23,7 +23,7 @@ export const PROCESSING_CONSTANTS = {
   // Quality thresholds
   QUALITY_THRESHOLD: 0.3,
   MIN_RELEVANCE_THRESHOLD: 0.1,
-  EVENT_CONFIDENCE_THRESHOLD: 0.3,
+  EVENT_CONFIDENCE_THRESHOLD: 0.15, // Lowered from 0.3 to catch more potential events
   HIGH_QUALITY_SCORE_THRESHOLD: 0.3,
 
   // Scoring weights
@@ -76,10 +76,7 @@ export function validateConfig(body: unknown): ScraperConfig {
     processing: {
       ai: {
         apiKey: process.env.ANTHROPIC_API_KEY || '',
-        model: ((requestBody.model as string) || 'claude-3-haiku-20240307') as
-          | 'claude-3-haiku-20240307'
-          | 'claude-3-sonnet-20240229'
-          | 'claude-3-5-sonnet-20241022',
+        model: 'claude-haiku-4-5-20251001',
         maxContinuations:
           (requestBody.maxContinuations as number) ||
           parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
@@ -131,7 +128,7 @@ export function getDefaultConfig(): Partial<ScraperConfig> {
         backoffMultiplier: 2,
       },
       ai: {
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
         apiKey: process.env.ANTHROPIC_API_KEY || '',
       },

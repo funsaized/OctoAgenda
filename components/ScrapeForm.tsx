@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import Image from 'next/image';
 
@@ -8,7 +8,6 @@ import { CalendarEvent } from '@/lib/api/types';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { type SubmitHandler, useForm } from 'react-hook-form';
 
-import EventGrid from './EventGrid';
 import styles from './shared.module.css';
 
 type FormInputs = {
@@ -22,6 +21,8 @@ function ScrapeForm() {
   const [submitError, setSubmitError] = useState('');
   const [processingUrl, setProcessingUrl] = useState('');
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [icsContent, setIcsContent] = useState<string | null>(null);
 
   const {
     register,
@@ -36,28 +37,33 @@ function ScrapeForm() {
     },
   });
 
+  // Auto-scroll to bottom when new events are added
+  useEffect(() => {
+    if (events.length > 0) {
+      const container = document.getElementById('events-container');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+  }, [events.length]);
+
   const onSubmit: SubmitHandler<FormInputs> = async (data) => {
     setIsLoading(true);
     setSubmitSuccess(false);
     setSubmitError('');
     setProcessingUrl(data.url);
-    setEvents([]); // Clear previous events
-    const form = data;
+    setEvents([]);
+    setStatusMessage('Starting...');
+    setIcsContent(null);
 
     try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      if (form.preferIcs) {
-        headers['Accept'] = 'text/calendar';
-      }
-
       const res = await fetch('/api/scrape', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          url: form.url,
+          url: data.url,
         }),
       });
 
@@ -65,46 +71,73 @@ function ScrapeForm() {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
 
-      if (form.preferIcs) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `events-${new Date().toISOString().split('T')[0]}.ics`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } else {
-        const responseData = await res.json();
-        console.log('Events extracted:', responseData);
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
 
-        // Store events for display
-        if (responseData.events && Array.isArray(responseData.events)) {
-          setEvents(responseData.events);
-        }
-
-        if (responseData.icsContent) {
-          const blob = new Blob([responseData.icsContent], {
-            type: 'text/calendar;charset=utf-8',
-          });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `events-${new Date().toISOString().split('T')[0]}.ics`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-        }
+      if (!reader) {
+        throw new Error('No response body');
       }
 
-      setSubmitSuccess(true);
-      reset();
+      let buffer = '';
 
-      setTimeout(() => {
-        setSubmitSuccess(false);
-      }, 5000);
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+
+        // Keep last incomplete line in buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || !line.startsWith('data: ')) continue;
+
+          const data = line.slice(6); // Remove 'data: ' prefix
+
+          try {
+            const update = JSON.parse(data);
+
+            if (update.type === 'status') {
+              setStatusMessage(update.data.message);
+            } else if (update.type === 'event') {
+              setEvents((prev) => [...prev, update.data]);
+            } else if (update.type === 'complete') {
+              console.log('📥 Received complete event:', update.data);
+              console.log('ICS content length:', update.data.icsContent?.length || 0);
+
+              setIcsContent(update.data.icsContent);
+              setStatusMessage(`✅ Complete! Extracted ${update.data.events.length} events`);
+
+              // Auto-download ICS if available
+              if (update.data.icsContent) {
+                console.log('💾 Downloading ICS file...');
+                const blob = new Blob([update.data.icsContent], {
+                  type: 'text/calendar;charset=utf-8',
+                });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `events-${new Date().toISOString().split('T')[0]}.ics`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+              }
+
+              setSubmitSuccess(true);
+              setTimeout(() => {
+                setSubmitSuccess(false);
+              }, 5000);
+            } else if (update.type === 'error') {
+              throw new Error(update.data.message);
+            }
+          } catch (parseError) {
+            console.error('Failed to parse SSE data:', parseError);
+          }
+        }
+      }
     } catch (error) {
       setSubmitError('An error occurred while processing your request. Please try again.');
       console.error('Submission error:', error);
@@ -310,12 +343,12 @@ function ScrapeForm() {
           </form>
         </div>
 
-        {isLoading && processingUrl && (
+        {(isLoading || events.length > 0) && (
           <div
             className="bg-white rounded-4 shadow-lg overflow-hidden w-100"
             style={{
               maxWidth: '800px',
-              animation: `${styles.floatUp} 1s ease-out 1s both`,
+              animation: `${styles.floatUp} 0.5s ease-out`,
             }}
           >
             <div
@@ -323,48 +356,67 @@ function ScrapeForm() {
               style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
             >
               <h3 className="m-0 mb-2 fw-semibold" style={{ fontSize: '1.25rem' }}>
-                📖 Page Preview
+                📅 Extracted Events
               </h3>
               <div className="m-0" style={{ fontSize: '0.9rem', opacity: '0.9' }}>
-                🔍 Analyzing this page for calendar events...
+                {statusMessage || '🔍 Analyzing page for calendar events...'}
+              </div>
+              <div className="mt-2 fw-semibold" style={{ fontSize: '1.1rem' }}>
+                {events.length} event{events.length !== 1 ? 's' : ''} found
               </div>
             </div>
 
-            <div className="position-relative bg-light" style={{ height: '400px' }}>
-              <iframe
-                src={processingUrl}
-                className="w-100 h-100 border-0 bg-white"
-                title="Website Preview"
-                sandbox="allow-same-origin allow-scripts"
-              />
-              <div
-                className="position-absolute top-0 start-0 end-0 bottom-0 d-flex flex-column align-items-center justify-content-center"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.45)',
-                  backdropFilter: 'blur(2px)',
-                }}
-              >
+            <div
+              className="p-4 bg-light"
+              style={{
+                height: '500px',
+                overflowY: 'auto',
+                scrollBehavior: 'smooth',
+              }}
+              id="events-container"
+            >
+              {events.length === 0 && isLoading && (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <div
+                    className="mb-3"
+                    style={{
+                      width: '3rem',
+                      height: '3rem',
+                      border: '4px solid rgba(102, 126, 234, 0.2)',
+                      borderRadius: '50%',
+                      borderTopColor: '#667eea',
+                      animation: `${styles.spin} 1s linear infinite`,
+                    }}
+                  ></div>
+                  <p className="m-0 fw-medium" style={{ color: '#667eea' }}>
+                    Waiting for events...
+                  </p>
+                </div>
+              )}
+
+              {events.map((event, idx) => (
                 <div
-                  className="mb-3"
+                  key={idx}
+                  className="mb-3 p-3 bg-white rounded-3 shadow-sm"
                   style={{
-                    width: '3rem',
-                    height: '3rem',
-                    border: '4px solid rgba(102, 126, 234, 0.2)',
-                    borderRadius: '50%',
-                    borderTopColor: '#667eea',
-                    animation: `${styles.spin} 1s linear infinite`,
+                    animation: `${styles.slideDown} 0.3s ease`,
+                    borderLeft: '4px solid #667eea',
                   }}
-                ></div>
-                <p className="m-0 fw-medium" style={{ color: '#667eea' }}>
-                  🤖 AI is scanning for events...
-                </p>
-              </div>
+                >
+                  <div className="fw-semibold mb-1" style={{ color: '#667eea', fontSize: '1rem' }}>
+                    {event.title}
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '0.875rem' }}>
+                    📍 {event.location}
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '0.875rem' }}>
+                    🕒 {new Date(event.startTime).toLocaleString()}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
-
-        {/* Event Grid - Show events if available */}
-        {events.length > 0 && <EventGrid events={events} />}
       </div>
     </>
   );
