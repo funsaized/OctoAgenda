@@ -12,15 +12,15 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@mendable/firecrawl-js": "^4.6.2",
+    "@mendable/firecrawl-js": "^4.8.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.1.3",
     "fast-levenshtein": "^3.0.0",
-    "@anthropic-ai/sdk": "^0.70.1",
+    "@anthropic-ai/sdk": "^0.71.0",
     "bootstrap": "^5.3.8",
     "cheerio": "^1.0.0-rc.12",
     "ical-generator": "^10.0.0",
-    "next": "16.0.3",
+    "next": "16.0.6",
     "node-fetch": "^3.3.2",
     "p-retry": "^7.1.0",
     "partial-json": "^0.1.7",
