@@ -152,66 +152,6 @@ export async function* streamScrapeEvents(
 }
 
 /**
- * Non-streaming scraper (backwards compatibility)
- */
-export async function scrapeEvents(
-  config: ScraperConfig,
-  anthropicClient: Anthropic
-): Promise<ScraperResult> {
-  let result: ScraperResult | null = null;
-
-  for await (const update of streamScrapeEvents(config, anthropicClient)) {
-    if (update.type === 'complete') {
-      result = update.data;
-    }
-  }
-
-  if (!result) {
-    throw new ScraperError(
-      'Scraping completed without result',
-      ErrorCode.INTERNAL_ERROR,
-      {},
-      false
-    );
-  }
-
-  return result;
-}
-
-/**
- * Chunk markdown content by paragraphs (keeping for backwards compatibility)
- */
-function chunkMarkdown(markdown: string, maxTokensPerChunk: number = 5000): string[] {
-  const chunks: string[] = [];
-  const paragraphs = markdown
-    .split(/\n\n+/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-
-  let currentChunk: string[] = [];
-  let currentTokens = 0;
-
-  for (const paragraph of paragraphs) {
-    const paragraphTokens = Math.ceil(paragraph.length / PROCESSING_CONSTANTS.CHARS_PER_TOKEN);
-
-    if (currentTokens + paragraphTokens > maxTokensPerChunk && currentChunk.length > 0) {
-      chunks.push(currentChunk.join('\n\n'));
-      currentChunk = [paragraph];
-      currentTokens = paragraphTokens;
-    } else {
-      currentChunk.push(paragraph);
-      currentTokens += paragraphTokens;
-    }
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk.join('\n\n'));
-  }
-
-  return chunks;
-}
-
-/**
  * Create scraper config from environment variables
  */
 export function createConfigFromEnv(): ScraperConfig {

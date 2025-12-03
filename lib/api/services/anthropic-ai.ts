@@ -106,7 +106,7 @@ export async function* streamExtractEvents(
     try {
       console.log(`\n=== STREAMING API CALL (Continuation ${continuationCount}) ===`);
 
-      const stream = await client.messages.stream({
+      const stream = client.messages.stream({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 64000, // Full 64K with streaming
         temperature: 0.2,
