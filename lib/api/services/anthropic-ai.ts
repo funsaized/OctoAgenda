@@ -23,7 +23,7 @@ export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
   validatedEvents: CalendarEvent[];
-  invalidEvents: any[];
+  invalidEvents: unknown[];
 }
 
 /**
@@ -33,7 +33,7 @@ export interface ValidationError {
   eventIndex: number;
   field: string;
   message: string;
-  value?: any;
+  value?: unknown;
 }
 
 /**
@@ -211,21 +211,22 @@ export async function* streamExtractEvents(
 
       // Small delay to avoid rate limiting
       await new Promise((resolve) => setTimeout(resolve, 500));
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as Error & { status?: number };
       console.error(`\n=== STREAMING ERROR ===`);
-      console.error(`Error: ${error.message}`);
+      console.error(`Error: ${err.message}`);
 
       // Handle retryable errors
-      if (error.status === 529 || error.status >= 500) {
+      if (err.status === 529 || (err.status && err.status >= 500)) {
         console.log(`⏳ Retrying after error...`);
         await new Promise((resolve) => setTimeout(resolve, 2000));
         continue;
       }
 
       throw new ScraperError(
-        `Streaming extraction failed: ${error.message}`,
+        `Streaming extraction failed: ${err.message}`,
         ErrorCode.AI_API_ERROR,
-        { error: error.message },
+        { error: err.message },
         false
       );
     }
@@ -371,41 +372,43 @@ function parseStreamedResponse(
 /**
  * Convert extracted event data to CalendarEvent
  */
-function convertToCalendarEvent(data: any, context?: ExtractionContext): CalendarEvent | null {
+function convertToCalendarEvent(data: unknown, context?: ExtractionContext): CalendarEvent | null {
+  const event = data as Record<string, unknown>;
   try {
     if (!data || typeof data !== 'object') {
       return null;
     }
 
-    if (!data.title?.trim()) {
+    const title = event.title as string | undefined;
+    if (!title?.trim()) {
       return null;
     }
 
-    if (!data.startTime) {
+    if (!event.startTime) {
       return null;
     }
 
-    const startTime = new Date(data.startTime);
+    const startTime = new Date(event.startTime as string);
     if (isNaN(startTime.getTime())) {
       return null;
     }
 
-    const endTime = data.endTime
-      ? new Date(data.endTime)
+    const endTime = event.endTime
+      ? new Date(event.endTime as string)
       : new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
 
-    const timezone = data.timezone || context?.timezoneHint || 'America/New_York';
+    const timezone = (event.timezone as string) || context?.timezoneHint || 'America/New_York';
 
     return {
-      title: data.title.trim(),
+      title: title.trim(),
       startTime,
       endTime,
-      location: data.location?.trim() || 'TBD',
-      description: data.description?.trim() || '',
+      location: ((event.location as string) || 'TBD').trim(),
+      description: ((event.description as string) || '').trim(),
       timezone,
-      organizer: data.organizer,
-      recurringRule: data.recurringRule,
-      url: data.url,
+      organizer: event.organizer as CalendarEvent['organizer'],
+      recurringRule: event.recurringRule as string | undefined,
+      url: event.url as string | undefined,
     };
   } catch (error) {
     return null;
@@ -429,36 +432,38 @@ function isDuplicate(event: CalendarEvent, existingEvents: CalendarEvent[]): boo
 /**
  * Validate extracted events
  */
-export function validateExtraction(events: any[]): ValidationResult {
+export function validateExtraction(events: unknown[]): ValidationResult {
   const errors: ValidationError[] = [];
   const validatedEvents: CalendarEvent[] = [];
-  const invalidEvents: any[] = [];
+  const invalidEvents: unknown[] = [];
 
-  events.forEach((event, index) => {
+  events.forEach((rawEvent, index) => {
+    const event = rawEvent as Record<string, unknown>;
     const eventErrors: ValidationError[] = [];
 
-    if (!event.title || event.title.trim().length === 0) {
+    const title = event?.title as string | undefined;
+    if (!title || title.trim().length === 0) {
       eventErrors.push({
         eventIndex: index,
         field: 'title',
         message: 'Title is required',
-        value: event.title,
+        value: title,
       });
     }
 
-    if (!event.startTime) {
+    if (!event?.startTime) {
       eventErrors.push({
         eventIndex: index,
         field: 'startTime',
         message: 'Start time is required',
-        value: event.startTime,
+        value: event?.startTime,
       });
     }
 
     if (eventErrors.length === 0) {
-      validatedEvents.push(event as CalendarEvent);
+      validatedEvents.push(rawEvent as CalendarEvent);
     } else {
-      invalidEvents.push(event);
+      invalidEvents.push(rawEvent);
       errors.push(...eventErrors);
     }
   });

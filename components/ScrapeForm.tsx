@@ -12,7 +12,6 @@ import styles from './shared.module.css';
 
 type FormInputs = {
   url: string;
-  preferIcs: boolean;
 };
 
 function ScrapeForm() {
@@ -33,7 +32,6 @@ function ScrapeForm() {
     mode: 'onChange',
     defaultValues: {
       url: '',
-      preferIcs: false,
     },
   });
 
@@ -286,27 +284,6 @@ function ScrapeForm() {
                   </small>
                 )}
               </div>
-            </div>
-
-            <div
-              className={`d-flex align-items-center mb-3 p-3 bg-light rounded-3 ${styles.checkboxContainer}`}
-              style={{ transition: 'background 0.3s ease' }}
-            >
-              <input
-                type="checkbox"
-                className="form-check-input me-3"
-                style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer' }}
-                id="icsCheck"
-                {...register('preferIcs')}
-                disabled={isLoading}
-              />
-              <label
-                className="form-check-label m-0 text-dark"
-                style={{ cursor: 'pointer', userSelect: 'none' }}
-                htmlFor="icsCheck"
-              >
-                📥 Export ICS file only
-              </label>
             </div>
 
             <button

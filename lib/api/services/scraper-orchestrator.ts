@@ -8,7 +8,7 @@ import {
   validateExtraction,
 } from '@/lib/api/services/anthropic-ai';
 import { scrapeWithFirecrawl } from '@/lib/api/services/firecrawl-service';
-import { generateICS, generateSingleEventICS } from '@/lib/api/services/ics-generator';
+import { generateICS } from '@/lib/api/services/ics-generator';
 import {
   CalendarEvent,
   ErrorCode,
@@ -16,6 +16,7 @@ import {
   ScraperConfig,
   ScraperError,
   ScraperResult,
+  SSEEvent,
 } from '@/lib/api/types/index';
 import type { Anthropic } from '@anthropic-ai/sdk';
 
@@ -50,7 +51,7 @@ const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
 export async function* streamScrapeEvents(
   config: ScraperConfig,
   anthropicClient: Anthropic
-): AsyncGenerator<{ type: 'event' | 'status' | 'complete'; data: any }, void, unknown> {
+): AsyncGenerator<SSEEvent, void, unknown> {
   const startTime = Date.now();
   const warnings: string[] = [];
   const processing = { ...DEFAULT_PROCESSING_OPTIONS, ...config.processing };

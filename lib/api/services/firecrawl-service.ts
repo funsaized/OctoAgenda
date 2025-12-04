@@ -148,42 +148,43 @@ export async function scrapeWithFirecrawl(
       html: data.html,
       links: data.links,
     };
-  } catch (error: any) {
-    console.error(`   ❌ Firecrawl error: ${error.message}`);
+  } catch (error) {
+    const err = error as Error & { status?: number };
+    console.error(`   ❌ Firecrawl error: ${err.message}`);
 
     // Handle Firecrawl-specific errors
-    if (error.status === 401 || error.status === 403) {
+    if (err.status === 401 || err.status === 403) {
       throw new ScraperError(
         'Firecrawl authentication failed - check API key',
         ErrorCode.CONFIGURATION_ERROR,
         {
           url,
-          status: error.status,
-          message: error.message,
+          status: err.status,
+          message: err.message,
         },
         false
       );
     }
 
-    if (error.status === 429) {
+    if (err.status === 429) {
       throw new ScraperError(
         'Firecrawl rate limit exceeded',
         ErrorCode.RATE_LIMIT_EXCEEDED,
         {
           url,
-          message: error.message,
+          message: err.message,
         },
         true
       );
     }
 
-    if (error.status === 402) {
+    if (err.status === 402) {
       throw new ScraperError(
         'Firecrawl credits exhausted - upgrade plan or add credits',
         ErrorCode.CONFIGURATION_ERROR,
         {
           url,
-          message: error.message,
+          message: err.message,
         },
         false
       );
@@ -194,12 +195,12 @@ export async function scrapeWithFirecrawl(
     }
 
     throw new ScraperError(
-      `Firecrawl scrape failed: ${error.message}`,
+      `Firecrawl scrape failed: ${err.message}`,
       ErrorCode.NETWORK_ERROR,
       {
         url,
-        originalError: error.message,
-        stack: error.stack,
+        originalError: err.message,
+        stack: err.stack,
       },
       true
     );
