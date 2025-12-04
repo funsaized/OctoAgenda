@@ -31,7 +31,6 @@ export const PROCESSING_CONSTANTS = {
   RELEVANCE_SCORE_WEIGHT: 0.4,
 
   // Batch processing
-  DEFAULT_BATCH_SIZE: 5,
   MAX_PRIORITY_CHUNKS: 20,
   MAX_EVENT_CONTAINERS: 10,
   AI_CONCURRENCY: 3,
@@ -81,7 +80,6 @@ export function validateConfig(body: unknown): ScraperConfig {
           (requestBody.maxContinuations as number) ||
           parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
       },
-      batchSize: (requestBody.batchSize as number) || parseInt(process.env.BATCH_SIZE || '50', 10),
       retry: {
         maxAttempts:
           (requestBody.retryAttempts as number) || parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
@@ -103,10 +101,6 @@ export function validateConfig(body: unknown): ScraperConfig {
     throw new Error('ANTHROPIC_API_KEY environment variable is required');
   }
 
-  if (config.processing?.batchSize && config.processing.batchSize < 1) {
-    throw new Error('Batch size must be at least 1');
-  }
-
   if (config?.processing?.retry?.maxAttempts && config.processing.retry.maxAttempts < 0) {
     throw new Error('Retry attempts cannot be negative');
   }
@@ -120,7 +114,6 @@ export function validateConfig(body: unknown): ScraperConfig {
 export function getDefaultConfig(): Partial<ScraperConfig> {
   return {
     processing: {
-      batchSize: parseInt(process.env.BATCH_SIZE || '50', 10),
       retry: {
         maxAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
         initialDelay: 1000,

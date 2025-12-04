@@ -17,14 +17,12 @@ import {
   ScraperError,
   ScraperResult,
 } from '@/lib/api/types/index';
-import { PROCESSING_CONSTANTS } from '@/lib/api/utils/config';
 import type { Anthropic } from '@anthropic-ai/sdk';
 
 /**
  * Default processing options
  */
 const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
-  batchSize: PROCESSING_CONSTANTS.DEFAULT_BATCH_SIZE,
   retry: {
     maxAttempts: 3,
     initialDelay: 1000,
@@ -166,7 +164,6 @@ export function createConfigFromEnv(): ScraperConfig {
         : undefined,
     },
     processing: {
-      batchSize: parseInt(process.env.BATCH_SIZE || '5', 10),
       retry: {
         maxAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
         initialDelay: 1000,

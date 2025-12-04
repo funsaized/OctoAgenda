@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
       },
       body: JSON.stringify({
         url: sourceUrl,
-        batchSize: parseInt(process.env.BATCH_SIZE || '50', 10),
         retryAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
         timezone: process.env.DEFAULT_TIMEZONE,
         calendarName: 'Automated Scrape',

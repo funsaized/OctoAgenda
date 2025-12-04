@@ -191,9 +191,6 @@ export interface CalendarCredentials {
  * Processing options for the scraper
  */
 export interface ProcessingOptions {
-  /** Number of events to process in parallel */
-  batchSize: number;
-
   /** Retry configuration */
   retry: RetryConfiguration;
 
