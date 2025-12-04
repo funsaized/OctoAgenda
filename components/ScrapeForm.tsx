@@ -210,12 +210,8 @@ function ScrapeForm() {
             🐙
           </h1>
 
-          <p className="text-center text-muted mb-2 fst-italic" style={{ fontSize: '0.95rem' }}>
-            ⚠️ A work in progress.. some functionality may 💩 the 🛌.{' '}
-          </p>
-
-          <p className="text-center text-muted mb-4" style={{ fontSize: '0.95rem' }}>
-            🎯 Transform any webpage into calendar events with AI magic ✨
+          <p className="text-center text-muted mb-2" style={{ fontSize: '0.95rem' }}>
+            ✨ Transform any webpage into calendar events with AI magic
           </p>
 
           {submitSuccess && (
