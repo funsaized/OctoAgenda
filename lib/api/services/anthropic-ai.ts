@@ -3,6 +3,7 @@
  * Uses Claude Haiku 4.5 with streaming for real-time event extraction
  */
 import { AIConfiguration, CalendarEvent, ErrorCode, ScraperError } from '@/lib/api/types/index';
+import { elapsed, type Logger } from '@/lib/api/utils/logger';
 import Anthropic from '@anthropic-ai/sdk';
 
 /**
@@ -86,20 +87,33 @@ export function createAnthropicClient(config: AIConfiguration): Anthropic {
 export async function* streamExtractEvents(
   client: Anthropic,
   content: string,
-  context?: ExtractionContext,
-  config?: AIConfiguration
+  context: ExtractionContext | undefined,
+  config: AIConfiguration | undefined,
+  log: Logger
 ): AsyncGenerator<CalendarEvent, void, unknown> {
+  const startTime = Date.now();
   const userPrompt = buildUserPrompt(content, context);
   let accumulatedText = '';
   let allEvents: CalendarEvent[] = [];
   let continuationCount = 0;
   const maxContinuations = config?.maxContinuations ?? 10;
 
+  log.info(
+    { contentLength: content.length, maxContinuations },
+    'Starting AI event extraction'
+  );
+
   const conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
     { role: 'user', content: userPrompt },
   ];
 
   while (continuationCount <= maxContinuations) {
+    const iterationStart = Date.now();
+    log.debug(
+      { iteration: continuationCount, messageCount: conversationMessages.length },
+      'Starting extraction iteration'
+    );
+
     try {
       const stream = client.messages.stream({
         model: 'claude-haiku-4-5-20251001',
@@ -111,11 +125,13 @@ export async function* streamExtractEvents(
 
       let chunkText = '';
       let lastYieldedCount = 0;
+      let chunkCount = 0;
 
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
           chunkText += event.delta.text;
           accumulatedText += event.delta.text;
+          chunkCount++;
 
           // Try to parse and yield events incrementally every 1000 chars
           if (accumulatedText.length - lastYieldedCount > 1000) {
@@ -124,6 +140,10 @@ export async function* streamExtractEvents(
             for (const newEvent of newEvents) {
               if (!isDuplicate(newEvent, allEvents)) {
                 allEvents.push(newEvent);
+                log.debug(
+                  { eventCount: allEvents.length, title: newEvent.title },
+                  'New event extracted'
+                );
                 yield newEvent;
               }
             }
@@ -134,6 +154,19 @@ export async function* streamExtractEvents(
       }
 
       const finalMessage = await stream.finalMessage();
+
+      log.debug(
+        {
+          iteration: continuationCount,
+          chunkCount,
+          responseLength: chunkText.length,
+          stopReason: finalMessage?.stop_reason,
+          inputTokens: finalMessage?.usage?.input_tokens,
+          outputTokens: finalMessage?.usage?.output_tokens,
+          durationMs: elapsed(iterationStart),
+        },
+        'Iteration complete'
+      );
 
       // Add assistant's response to conversation
       conversationMessages.push({
@@ -147,6 +180,7 @@ export async function* streamExtractEvents(
       for (const event of newEvents) {
         if (!isDuplicate(event, allEvents)) {
           allEvents.push(event);
+          log.debug({ eventCount: allEvents.length, title: event.title }, 'New event extracted (final batch)');
           yield event;
         }
       }
@@ -156,10 +190,24 @@ export async function* streamExtractEvents(
       const shouldContinue = stopReason === 'max_tokens' && continuationCount < maxContinuations;
 
       if (!shouldContinue) {
+        log.info(
+          {
+            totalEvents: allEvents.length,
+            iterations: continuationCount + 1,
+            stopReason,
+            durationMs: elapsed(startTime),
+          },
+          'AI extraction complete'
+        );
         break;
       }
 
       // Request continuation
+      log.info(
+        { eventsExtracted: allEvents.length, iteration: continuationCount },
+        'Requesting continuation due to max_tokens'
+      );
+
       conversationMessages.push({
         role: 'user',
         content: `Continue extracting the remaining events. You've already extracted ${allEvents.length} events. Continue with the next events in the list.`,
@@ -174,9 +222,18 @@ export async function* streamExtractEvents(
 
       // Handle retryable errors
       if (err.status === 529 || (err.status && err.status >= 500)) {
+        log.warn(
+          { status: err.status, iteration: continuationCount },
+          'Retryable error, waiting before retry'
+        );
         await new Promise((resolve) => setTimeout(resolve, 2000));
         continue;
       }
+
+      log.error(
+        { err, iteration: continuationCount, eventsExtracted: allEvents.length, durationMs: elapsed(startTime) },
+        'AI extraction failed'
+      );
 
       throw new ScraperError(
         `Streaming extraction failed: ${err.message}`,

@@ -3,6 +3,7 @@
  * Handles web scraping and markdown conversion using Firecrawl API
  */
 import { ErrorCode, ScraperError } from '@/lib/api/types/index';
+import { elapsed, type Logger } from '@/lib/api/utils/logger';
 import Firecrawl from '@mendable/firecrawl-js';
 
 /**
@@ -48,10 +49,11 @@ export interface FirecrawlOptions {
 /**
  * Initialize Firecrawl client
  */
-function createFirecrawlClient(): Firecrawl {
+function createFirecrawlClient(log: Logger): Firecrawl {
   const apiKey = process.env.FIRECRAWL_API_KEY;
 
   if (!apiKey) {
+    log.error('FIRECRAWL_API_KEY not configured');
     throw new ScraperError(
       'FIRECRAWL_API_KEY environment variable is required',
       ErrorCode.CONFIGURATION_ERROR,
@@ -60,6 +62,7 @@ function createFirecrawlClient(): Firecrawl {
     );
   }
 
+  log.debug('Firecrawl client initialized');
   return new Firecrawl({ apiKey });
 }
 
@@ -68,15 +71,21 @@ function createFirecrawlClient(): Firecrawl {
  */
 export async function scrapeWithFirecrawl(
   url: string,
-  options: FirecrawlOptions = {}
+  options: FirecrawlOptions = {},
+  log: Logger
 ): Promise<FirecrawlResult> {
+  const startTime = Date.now();
+  log.info({ url }, 'Starting Firecrawl scrape');
+
   try {
-    const client = createFirecrawlClient();
+    const client = createFirecrawlClient(log);
 
     const formats = options.formats || ['markdown'];
     if (!formats.includes('markdown')) {
       formats.push('markdown');
     }
+
+    log.debug({ formats, timeout: options.timeout }, 'Scrape configuration');
 
     const result = await client.scrape(url, {
       formats: formats as unknown as ('markdown' | 'html' | 'links' | 'screenshot')[],
@@ -86,12 +95,11 @@ export async function scrapeWithFirecrawl(
 
     // Check if scrape was successful
     if (!result) {
+      log.error({ url, durationMs: elapsed(startTime) }, 'Firecrawl returned no result');
       throw new ScraperError(
         'Firecrawl scrape failed - no result returned',
         ErrorCode.NETWORK_ERROR,
-        {
-          url,
-        },
+        { url },
         true
       );
     }
@@ -99,6 +107,10 @@ export async function scrapeWithFirecrawl(
     const data = result;
 
     if (!data || !data.markdown) {
+      log.error(
+        { url, hasData: !!data, dataKeys: data ? Object.keys(data) : [], durationMs: elapsed(startTime) },
+        'No markdown content in Firecrawl response'
+      );
       throw new ScraperError(
         'No markdown content returned from Firecrawl',
         ErrorCode.INVALID_HTML,
@@ -110,6 +122,19 @@ export async function scrapeWithFirecrawl(
         false
       );
     }
+
+    log.info(
+      {
+        url,
+        markdownLength: data.markdown.length,
+        title: data.metadata?.title,
+        language: data.metadata?.language,
+        statusCode: data.metadata?.statusCode,
+        linksCount: data.links?.length,
+        durationMs: elapsed(startTime),
+      },
+      'Firecrawl scrape successful'
+    );
 
     return {
       markdown: data.markdown,
@@ -128,6 +153,7 @@ export async function scrapeWithFirecrawl(
 
     // Handle Firecrawl-specific errors
     if (err.status === 401 || err.status === 403) {
+      log.error({ url, status: err.status, durationMs: elapsed(startTime) }, 'Firecrawl authentication failed');
       throw new ScraperError(
         'Firecrawl authentication failed - check API key',
         ErrorCode.CONFIGURATION_ERROR,
@@ -141,6 +167,7 @@ export async function scrapeWithFirecrawl(
     }
 
     if (err.status === 429) {
+      log.warn({ url, durationMs: elapsed(startTime) }, 'Firecrawl rate limit exceeded');
       throw new ScraperError(
         'Firecrawl rate limit exceeded',
         ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -153,6 +180,7 @@ export async function scrapeWithFirecrawl(
     }
 
     if (err.status === 402) {
+      log.error({ url, durationMs: elapsed(startTime) }, 'Firecrawl credits exhausted');
       throw new ScraperError(
         'Firecrawl credits exhausted - upgrade plan or add credits',
         ErrorCode.CONFIGURATION_ERROR,
@@ -168,27 +196,19 @@ export async function scrapeWithFirecrawl(
       throw error;
     }
 
+    log.error(
+      { url, err, status: err.status, durationMs: elapsed(startTime) },
+      'Firecrawl scrape failed'
+    );
+
     throw new ScraperError(
       `Firecrawl scrape failed: ${err.message}`,
       ErrorCode.NETWORK_ERROR,
       {
         url,
         originalError: err.message,
-        stack: err.stack,
       },
       true
     );
   }
-}
-
-/**
- * Simple fetch function that returns just the markdown content
- * Compatible with existing code that expects a string
- */
-export async function fetchMarkdownWithFirecrawl(url: string): Promise<string> {
-  const result = await scrapeWithFirecrawl(url, {
-    formats: ['markdown'],
-  });
-
-  return result.markdown;
 }

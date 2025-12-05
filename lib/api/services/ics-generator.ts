@@ -3,6 +3,7 @@
  * Generates iCalendar files from event data
  */
 import { CalendarEvent, ICSOptions } from '@/lib/api/types/index';
+import { type Logger } from '@/lib/api/utils/logger';
 import ical, {
   ICalAlarmType,
   ICalCalendar,
@@ -32,20 +33,41 @@ const DEFAULT_ICS_OPTIONS: ICSOptions = {
 /**
  * Generate ICS file from events
  */
-export function generateICS(events: CalendarEvent[], options?: Partial<ICSOptions>): string {
+export function generateICS(
+  events: CalendarEvent[],
+  options: Partial<ICSOptions> | undefined,
+  log: Logger
+): string {
   const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options };
 
+  log.info(
+    { eventCount: events.length, calendarName: config.calendarName, timezone: config.timezone },
+    'Starting ICS generation'
+  );
+
   const calendar = createCalendar(config);
+  let successCount = 0;
+  let failedCount = 0;
 
   for (const event of events) {
     try {
       addEventToCalendar(calendar, event, config);
-    } catch {
-      // Continue with other events if one fails
+      successCount++;
+      log.debug({ title: event.title, startTime: event.startTime }, 'Event added to calendar');
+    } catch (err) {
+      failedCount++;
+      log.warn({ err, title: event.title }, 'Failed to add event to calendar');
     }
   }
 
-  return calendar.toString();
+  const icsContent = calendar.toString();
+
+  log.info(
+    { successCount, failedCount, icsLength: icsContent.length },
+    'ICS generation complete'
+  );
+
+  return icsContent;
 }
 
 /**
