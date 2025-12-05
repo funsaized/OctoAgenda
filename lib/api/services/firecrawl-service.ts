@@ -70,29 +70,19 @@ export async function scrapeWithFirecrawl(
   url: string,
   options: FirecrawlOptions = {}
 ): Promise<FirecrawlResult> {
-  console.log(`\n🔥 FIRECRAWL: Scraping ${url}`);
-
   try {
     const client = createFirecrawlClient();
 
-    // Default to markdown format, add others if specified
     const formats = options.formats || ['markdown'];
     if (!formats.includes('markdown')) {
       formats.push('markdown');
     }
 
-    console.log(`   📋 Requested formats: ${formats.join(', ')}`);
-
-    // Call Firecrawl API
-    const startTime = Date.now();
     const result = await client.scrape(url, {
-      formats: formats as any,
+      formats: formats as unknown as ('markdown' | 'html' | 'links' | 'screenshot')[],
       timeout: options.timeout,
       waitFor: options.waitAfterLoad,
     });
-
-    const duration = Date.now() - startTime;
-    console.log(`   ✅ Firecrawl scrape completed in ${duration}ms`);
 
     // Check if scrape was successful
     if (!result) {
@@ -106,7 +96,6 @@ export async function scrapeWithFirecrawl(
       );
     }
 
-    // Firecrawl returns data directly, not wrapped in {success, data}
     const data = result;
 
     if (!data || !data.markdown) {
@@ -120,20 +109,6 @@ export async function scrapeWithFirecrawl(
         },
         false
       );
-    }
-
-    // Log content statistics
-    console.log(`   📏 Markdown length: ${data.markdown.length.toLocaleString()} characters`);
-    if (data.metadata) {
-      console.log(`   📋 Page title: "${data.metadata.title || 'N/A'}"`);
-      console.log(`   🌐 Language: ${data.metadata.language || 'unknown'}`);
-      console.log(`   📊 Status code: ${data.metadata.statusCode || 'N/A'}`);
-    }
-    if (data.html) {
-      console.log(`   📄 HTML length: ${data.html.length.toLocaleString()} characters`);
-    }
-    if (data.links) {
-      console.log(`   🔗 Links found: ${data.links.length}`);
     }
 
     return {
@@ -150,7 +125,6 @@ export async function scrapeWithFirecrawl(
     };
   } catch (error) {
     const err = error as Error & { status?: number };
-    console.error(`   ❌ Firecrawl error: ${err.message}`);
 
     // Handle Firecrawl-specific errors
     if (err.status === 401 || err.status === 403) {

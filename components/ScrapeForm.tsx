@@ -102,15 +102,10 @@ function ScrapeForm() {
             } else if (update.type === 'event') {
               setEvents((prev) => [...prev, update.data]);
             } else if (update.type === 'complete') {
-              console.log('📥 Received complete event:', update.data);
-              console.log('ICS content length:', update.data.icsContent?.length || 0);
-
               setIcsContent(update.data.icsContent);
               setStatusMessage(`✅ Complete! Extracted ${update.data.events.length} events`);
 
-              // Auto-download ICS if available
               if (update.data.icsContent) {
-                console.log('💾 Downloading ICS file...');
                 const blob = new Blob([update.data.icsContent], {
                   type: 'text/calendar;charset=utf-8',
                 });
@@ -131,14 +126,13 @@ function ScrapeForm() {
             } else if (update.type === 'error') {
               throw new Error(update.data.message);
             }
-          } catch (parseError) {
-            console.error('Failed to parse SSE data:', parseError);
+          } catch {
+            // Skip malformed SSE data
           }
         }
       }
-    } catch (error) {
+    } catch {
       setSubmitError('An error occurred while processing your request. Please try again.');
-      console.error('Submission error:', error);
     } finally {
       setIsLoading(false);
       setProcessingUrl('');

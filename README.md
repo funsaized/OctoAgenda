@@ -164,8 +164,7 @@ Standard Next.js app - deploy to any platform supporting Node.js 18+:
 │       │   ├── anthropic-ai.ts           # Claude AI streaming integration
 │       │   ├── firecrawl-service.ts      # Firecrawl web scraping
 │       │   ├── ics-generator.ts          # ICS file generation
-│       │   ├── scraper-orchestrator.ts   # Main orchestration logic
-│       │   └── timezone-intelligence.ts  # Timezone detection
+│       │   └── scraper-orchestrator.ts   # Main orchestration logic
 │       ├── types/
 │       │   └── index.ts                  # TypeScript type definitions
 │       └── utils/

@@ -120,10 +120,6 @@ export async function* streamScrapeEvents(
 
     const processingTime = Date.now() - startTime;
 
-    console.log(`\n=== SENDING COMPLETE EVENT ===`);
-    console.log(`ICS content length: ${icsContent?.length || 0} chars`);
-    console.log(`Total events: ${validation.validatedEvents.length}`);
-
     // Final result
     yield {
       type: 'complete',
@@ -140,7 +136,6 @@ export async function* streamScrapeEvents(
       } as ScraperResult,
     };
 
-    console.log(`✅ Complete event sent`);
   } catch (error) {
     if (error instanceof ScraperError) {
       throw error;
@@ -148,46 +143,4 @@ export async function* streamScrapeEvents(
 
     throw new ScraperError(`Scraping failed: ${error}`, ErrorCode.INTERNAL_ERROR, { error }, false);
   }
-}
-
-/**
- * Create scraper config from environment variables
- */
-export function createConfigFromEnv(): ScraperConfig {
-  return {
-    source: {
-      url: process.env.SOURCE_URL || '',
-      userAgent: process.env.SOURCE_USER_AGENT,
-      selectors: process.env.SOURCE_SELECTOR
-        ? {
-            eventContainer: process.env.SOURCE_SELECTOR,
-          }
-        : undefined,
-    },
-    processing: {
-      retry: {
-        maxAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
-        initialDelay: 1000,
-        maxDelay: 30000,
-        backoffMultiplier: 2,
-      },
-      cache: {
-        enabled: process.env.CACHE_ENABLED !== 'false',
-        ttl: parseInt(process.env.CACHE_TTL || '3600', 10),
-      },
-      timezone: {
-        default: process.env.DEFAULT_TIMEZONE || 'America/New_York',
-        autoDetect: process.env.DETECT_TIMEZONE !== 'false',
-      },
-      ai: {
-        apiKey: process.env.ANTHROPIC_API_KEY || '',
-        model: 'claude-haiku-4-5-20251001',
-      },
-    },
-    ics: {
-      calendarName: process.env.CALENDAR_NAME || 'Scraped Events',
-      timezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
-      includeAlarms: process.env.INCLUDE_ALARMS !== 'false',
-    },
-  };
 }

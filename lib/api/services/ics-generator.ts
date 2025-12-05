@@ -9,7 +9,10 @@ import ical, {
   ICalCalendarMethod,
   ICalEvent,
   ICalEventData,
+  ICalEventRepeatingFreq,
   ICalEventStatus,
+  ICalRepeatingOptions,
+  ICalWeekday,
 } from 'ical-generator';
 
 /**
@@ -32,38 +35,15 @@ const DEFAULT_ICS_OPTIONS: ICSOptions = {
 export function generateICS(events: CalendarEvent[], options?: Partial<ICSOptions>): string {
   const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options };
 
-  // Create calendar
   const calendar = createCalendar(config);
 
-  // Add events to calendar
   for (const event of events) {
     try {
       addEventToCalendar(calendar, event, config);
-    } catch (error) {
-      console.error(`Failed to add event "${event.title}" to calendar:`, error);
-      // Continue with other events
+    } catch {
+      // Continue with other events if one fails
     }
   }
-
-  // Generate ICS string
-  const icsString = calendar.toString();
-  console.log('Generated ICS length:', icsString?.length || 0);
-  console.log('First 200 chars:', icsString?.substring(0, 200));
-  return icsString;
-}
-
-/**
- * Generate individual ICS file for a single event
- */
-export function generateSingleEventICS(
-  event: CalendarEvent,
-  options?: Partial<ICSOptions>
-): string {
-  const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options, method: 'REQUEST' };
-
-  // Create calendar with single event
-  const calendar = createCalendar(config);
-  addEventToCalendar(calendar, event, config);
 
   return calendar.toString();
 }
@@ -80,7 +60,6 @@ function createCalendar(options: ICSOptions): ICalCalendar {
     scale: options.scale,
   });
 
-  // Set calendar method
   if (options.method) {
     const methodMap: Record<string, ICalCalendarMethod> = {
       PUBLISH: ICalCalendarMethod.PUBLISH,
@@ -106,7 +85,6 @@ function addEventToCalendar(
   event: CalendarEvent,
   options: ICSOptions
 ): ICalEvent {
-  // Prepare event data
   const eventData: ICalEventData = {
     start: event.startTime,
     end: event.endTime,
@@ -117,12 +95,10 @@ function addEventToCalendar(
     categories: event.categories?.map((cat) => ({ name: cat })),
   };
 
-  // Add URL if available
   if (event.url) {
     eventData.url = event.url;
   }
 
-  // Add organizer if available
   if (event.organizer) {
     eventData.organizer = {
       name: event.organizer.name || 'system',
@@ -130,7 +106,6 @@ function addEventToCalendar(
     };
   }
 
-  // Set status
   if (event.status) {
     const statusMap: Record<string, ICalEventStatus> = {
       CONFIRMED: ICalEventStatus.CONFIRMED,
@@ -144,46 +119,41 @@ function addEventToCalendar(
     }
   }
 
-  // Create event
   const calEvent = calendar.createEvent(eventData);
 
-  // Set UID separately
   calEvent.uid(event.uid || generateUID(event));
 
-  // Add attendees
   if (event.attendees && event.attendees.length > 0) {
     for (const attendee of event.attendees) {
-      calEvent.createAttendee({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const attendeeData: any = {
         email: attendee.email,
         name: attendee.name,
         rsvp: attendee.rsvp,
-        status: attendee.status as any,
-        role: attendee.role as any,
-      });
+      };
+      if (attendee.status) attendeeData.status = attendee.status;
+      if (attendee.role) attendeeData.role = attendee.role;
+      calEvent.createAttendee(attendeeData);
     }
   }
 
-  // Add recurring rule if present
   if (event.recurringRule) {
     try {
-      // Parse RRULE and apply to event
       applyRecurringRule(calEvent, event.recurringRule);
-    } catch (error) {
-      console.warn(`Failed to apply recurring rule: ${error}`);
+    } catch {
+      // Ignore invalid recurring rules
     }
   }
 
-  // Add alarm if configured
   if (options.includeAlarms) {
     const alarmMinutes = options.defaultAlarmMinutes || 30;
 
     calEvent.createAlarm({
       type: ICalAlarmType.display,
-      trigger: -alarmMinutes * 60, // Negative seconds before event
+      trigger: -alarmMinutes * 60,
       description: `Reminder: ${event.title}`,
     });
 
-    // Add email alarm if organizer email is available
     if (event.organizer?.email) {
       const emailAlarm = calEvent.createAlarm({
         type: ICalAlarmType.email,
@@ -221,20 +191,29 @@ function simpleHash(str: string): string {
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash).toString(36);
+}
+
+interface RecurringRules {
+  freq?: ICalEventRepeatingFreq;
+  interval?: number;
+  count?: number;
+  until?: Date;
+  byDay?: ICalWeekday[];
+  byMonth?: number[];
+  byMonthDay?: number[];
 }
 
 /**
  * Apply recurring rule to event
  */
 function applyRecurringRule(event: ICalEvent, rrule: string): void {
-  // Parse RRULE string
   const rules = parseRRule(rrule);
 
   if (rules.freq) {
-    const repeating: any = {
+    const repeating: ICalRepeatingOptions = {
       freq: rules.freq,
     };
 
@@ -269,14 +248,31 @@ function applyRecurringRule(event: ICalEvent, rrule: string): void {
 /**
  * Parse RRULE string into components
  */
-function parseRRule(rrule: string): Record<string, any> {
-  const rules: Record<string, any> = {};
+function parseRRule(rrule: string): RecurringRules {
+  const rules: RecurringRules = {};
 
-  // Remove RRULE: prefix if present
   const ruleStr = rrule.replace(/^RRULE:/i, '');
-
-  // Split into key-value pairs
   const pairs = ruleStr.split(';');
+
+  const validFreqs: ICalEventRepeatingFreq[] = [
+    ICalEventRepeatingFreq.SECONDLY,
+    ICalEventRepeatingFreq.MINUTELY,
+    ICalEventRepeatingFreq.HOURLY,
+    ICalEventRepeatingFreq.DAILY,
+    ICalEventRepeatingFreq.WEEKLY,
+    ICalEventRepeatingFreq.MONTHLY,
+    ICalEventRepeatingFreq.YEARLY,
+  ];
+
+  const weekdayMap: Record<string, ICalWeekday> = {
+    SU: ICalWeekday.SU,
+    MO: ICalWeekday.MO,
+    TU: ICalWeekday.TU,
+    WE: ICalWeekday.WE,
+    TH: ICalWeekday.TH,
+    FR: ICalWeekday.FR,
+    SA: ICalWeekday.SA,
+  };
 
   for (const pair of pairs) {
     const [key, value] = pair.split('=');
@@ -284,9 +280,11 @@ function parseRRule(rrule: string): Record<string, any> {
     if (!key || !value) continue;
 
     switch (key.toUpperCase()) {
-      case 'FREQ':
-        rules.freq = value.toUpperCase();
+      case 'FREQ': {
+        const freq = validFreqs.find((f) => f === value.toUpperCase());
+        if (freq) rules.freq = freq;
         break;
+      }
 
       case 'INTERVAL':
         rules.interval = parseInt(value, 10);
@@ -301,7 +299,10 @@ function parseRRule(rrule: string): Record<string, any> {
         break;
 
       case 'BYDAY':
-        rules.byDay = value.split(',');
+        rules.byDay = value
+          .split(',')
+          .map((d) => weekdayMap[d.toUpperCase()])
+          .filter((d): d is ICalWeekday => d !== undefined);
         break;
 
       case 'BYMONTH':
@@ -315,175 +316,4 @@ function parseRRule(rrule: string): Record<string, any> {
   }
 
   return rules;
-}
-
-/**
- * Validate ICS content
- */
-export function validateICS(icsContent: string): boolean {
-  try {
-    // Check for required ICS headers
-    if (!icsContent.includes('BEGIN:VCALENDAR')) {
-      return false;
-    }
-
-    if (!icsContent.includes('END:VCALENDAR')) {
-      return false;
-    }
-
-    if (!icsContent.includes('VERSION:2.0')) {
-      return false;
-    }
-
-    // Check for at least one event
-    if (!icsContent.includes('BEGIN:VEVENT')) {
-      return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Create ICS download response headers
- */
-export function getICSHeaders(filename: string = 'events.ics'): Record<string, string> {
-  return {
-    'Content-Type': 'text/calendar; charset=utf-8',
-    'Content-Disposition': `attachment; filename="${filename}"`,
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    Pragma: 'no-cache',
-    Expires: '0',
-  };
-}
-
-/**
- * Generate ICS blob for browser download
- */
-export function generateICSBlob(icsContent: string): Blob {
-  return new Blob([icsContent], { type: 'text/calendar' });
-}
-
-/**
- * Generate ICS download URL
- */
-export function generateICSDownloadURL(icsContent: string): string {
-  const blob = generateICSBlob(icsContent);
-  return URL.createObjectURL(blob);
-}
-
-/**
- * Batch generate ICS files for multiple event sets
- */
-export function batchGenerateICS(
-  eventSets: CalendarEvent[][],
-  options?: Partial<ICSOptions>
-): string[] {
-  return eventSets.map((events) => generateICS(events, options));
-}
-
-/**
- * Merge multiple ICS strings into one
- */
-export function mergeICSFiles(icsFiles: string[], options?: Partial<ICSOptions>): string {
-  const config: ICSOptions = { ...DEFAULT_ICS_OPTIONS, ...options };
-  const calendar = createCalendar(config);
-
-  // Extract events from each ICS file and add to merged calendar
-  for (const icsContent of icsFiles) {
-    try {
-      const events = parseICSEvents(icsContent);
-      for (const event of events) {
-        addEventToCalendar(calendar, event, config);
-      }
-    } catch (error) {
-      console.error('Failed to merge ICS file:', error);
-    }
-  }
-
-  return calendar.toString();
-}
-
-/**
- * Parse events from ICS content (simplified)
- */
-function parseICSEvents(icsContent: string): CalendarEvent[] {
-  const events: CalendarEvent[] = [];
-
-  // This is a simplified parser - in production, use a proper ICS parser library
-  const eventMatches = icsContent.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g);
-
-  if (eventMatches) {
-    for (const eventStr of eventMatches) {
-      const event = parseICSEvent(eventStr);
-      if (event) {
-        events.push(event);
-      }
-    }
-  }
-
-  return events;
-}
-
-/**
- * Parse single ICS event (simplified)
- */
-function parseICSEvent(eventStr: string): CalendarEvent | null {
-  try {
-    const getField = (field: string): string | undefined => {
-      const match = eventStr.match(new RegExp(`${field}:(.*)`, 'i'));
-      return match && match[1] ? match[1].trim() : undefined;
-    };
-
-    const summary = getField('SUMMARY');
-    const dtstart = getField('DTSTART');
-    const dtend = getField('DTEND');
-    const location = getField('LOCATION');
-    const description = getField('DESCRIPTION');
-
-    if (!summary || !dtstart) {
-      return null;
-    }
-
-    return {
-      title: summary,
-      startTime: parseICSDate(dtstart),
-      endTime: dtend ? parseICSDate(dtend) : addDefaultDuration(parseICSDate(dtstart)),
-      location: location || 'TBD',
-      description: description || '',
-      timezone: 'UTC',
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Parse ICS date format
- */
-function parseICSDate(dateStr: string): Date {
-  // Handle basic YYYYMMDDTHHMMSS format
-  if (dateStr.length === 15 || dateStr.length === 16) {
-    const year = parseInt(dateStr.substring(0, 4), 10);
-    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
-    const day = parseInt(dateStr.substring(6, 8), 10);
-    const hour = parseInt(dateStr.substring(9, 11), 10);
-    const minute = parseInt(dateStr.substring(11, 13), 10);
-    const second = parseInt(dateStr.substring(13, 15), 10);
-
-    return new Date(Date.UTC(year, month, day, hour, minute, second));
-  }
-
-  return new Date(dateStr);
-}
-
-/**
- * Add default duration to date
- */
-function addDefaultDuration(date: Date): Date {
-  const endDate = new Date(date);
-  endDate.setHours(endDate.getHours() + 2);
-  return endDate;
 }

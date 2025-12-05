@@ -89,9 +89,6 @@ export async function* streamExtractEvents(
   context?: ExtractionContext,
   config?: AIConfiguration
 ): AsyncGenerator<CalendarEvent, void, unknown> {
-  console.log('\n=== STREAM EXTRACT EVENTS CALLED ===');
-  console.log(`Content length: ${content.length} characters`);
-
   const userPrompt = buildUserPrompt(content, context);
   let accumulatedText = '';
   let allEvents: CalendarEvent[] = [];
@@ -104,26 +101,18 @@ export async function* streamExtractEvents(
 
   while (continuationCount <= maxContinuations) {
     try {
-      console.log(`\n=== STREAMING API CALL (Continuation ${continuationCount}) ===`);
-
       const stream = client.messages.stream({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 64000, // Full 64K with streaming
+        max_tokens: 64000,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         messages: conversationMessages,
       });
 
       let chunkText = '';
-      let eventCount = 0;
       let lastYieldedCount = 0;
 
       for await (const event of stream) {
-        eventCount++;
-        if (eventCount <= 5) {
-          console.log(`Stream event ${eventCount}:`, event.type, event);
-        }
-
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
           chunkText += event.delta.text;
           accumulatedText += event.delta.text;
@@ -136,7 +125,6 @@ export async function* streamExtractEvents(
               if (!isDuplicate(newEvent, allEvents)) {
                 allEvents.push(newEvent);
                 yield newEvent;
-                console.log(`🔄 Streamed event ${allEvents.length}: "${newEvent.title}"`);
               }
             }
 
@@ -147,61 +135,31 @@ export async function* streamExtractEvents(
 
       const finalMessage = await stream.finalMessage();
 
-      console.log(`\n=== STREAM COMPLETE ===`);
-      console.log(`Total stream events received: ${eventCount}`);
-      console.log(`Chunk text length: ${chunkText.length} chars`);
-      console.log(`Accumulated text length: ${accumulatedText.length} chars`);
-      console.log(`Final message:`, JSON.stringify(finalMessage, null, 2));
-      console.log(`Stop reason: ${finalMessage?.stop_reason}`);
-      console.log(`Usage:`, finalMessage?.usage);
-      console.log(`Chunk text preview (last 200 chars):\n${chunkText.slice(-200)}`);
-
       // Add assistant's response to conversation
       conversationMessages.push({
         role: 'assistant',
         content: chunkText,
       });
 
-      // Try to parse events from accumulated text
-      console.log(`\n=== PARSING ACCUMULATED TEXT ===`);
-      console.log(`All events count before parsing: ${allEvents.length}`);
+      // Parse final batch of events
       const newEvents = parseStreamedResponse(accumulatedText, context, allEvents.length);
-      console.log(`New events parsed: ${newEvents.length}`);
 
-      // Yield new events to client in real-time
-      let yieldedCount = 0;
       for (const event of newEvents) {
         if (!isDuplicate(event, allEvents)) {
           allEvents.push(event);
           yield event;
-          yieldedCount++;
-          console.log(
-            `Yielded event ${allEvents.length}: "${event.title}" at ${event.startTime.toISOString()}`
-          );
-        } else {
-          console.log(`Skipped duplicate: "${event.title}"`);
         }
       }
-      console.log(`Total yielded this iteration: ${yieldedCount}`);
-      console.log(`Total events accumulated: ${allEvents.length}`);
 
       // Check if we should continue
       const stopReason = finalMessage?.stop_reason;
       const shouldContinue = stopReason === 'max_tokens' && continuationCount < maxContinuations;
 
-      console.log(`\n=== CONTINUATION CHECK ===`);
-      console.log(`Stop reason: ${stopReason}`);
-      console.log(`Continuation count: ${continuationCount}/${maxContinuations}`);
-      console.log(`Should continue: ${shouldContinue}`);
-
       if (!shouldContinue) {
-        console.log(`\n=== EXTRACTION COMPLETE ===`);
-        console.log(`Total events extracted: ${allEvents.length}`);
         break;
       }
 
-      // Request continuation - ask AI to continue from where it left off
-      console.log(`\n⏩ Requesting continuation (${allEvents.length} events so far)...`);
+      // Request continuation
       conversationMessages.push({
         role: 'user',
         content: `Continue extracting the remaining events. You've already extracted ${allEvents.length} events. Continue with the next events in the list.`,
@@ -213,12 +171,9 @@ export async function* streamExtractEvents(
       await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error) {
       const err = error as Error & { status?: number };
-      console.error(`\n=== STREAMING ERROR ===`);
-      console.error(`Error: ${err.message}`);
 
       // Handle retryable errors
       if (err.status === 529 || (err.status && err.status >= 500)) {
-        console.log(`⏳ Retrying after error...`);
         await new Promise((resolve) => setTimeout(resolve, 2000));
         continue;
       }
@@ -269,39 +224,28 @@ function parseStreamedResponse(
   context?: ExtractionContext,
   skipCount: number = 0
 ): CalendarEvent[] {
-  console.log(`\n=== PARSING STREAMED RESPONSE ===`);
-  console.log(`Accumulated text length: ${accumulatedText.length} chars`);
-  console.log(`Skip count: ${skipCount} (already processed events)`);
-  console.log(`Text preview (first 300 chars):\n${accumulatedText.substring(0, 300)}`);
-  console.log(`Text preview (last 300 chars):\n${accumulatedText.slice(-300)}`);
-
   try {
     // Find JSON in the response
     const jsonMatch = accumulatedText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.log('❌ No JSON structure found yet');
       return [];
     }
 
     const jsonStr = jsonMatch[0];
-    console.log(`✅ Found JSON string: ${jsonStr.length} chars`);
 
     // Try to parse the JSON
     let parsed;
     try {
       parsed = JSON.parse(jsonStr);
-    } catch (e) {
+    } catch {
       // If JSON is incomplete, try to fix it by adding closing brackets
-      console.log('JSON incomplete, attempting to fix...');
       let fixed = jsonStr;
 
-      // Count brackets to see what's missing
       const openBraces = (fixed.match(/\{/g) || []).length;
       const closeBraces = (fixed.match(/\}/g) || []).length;
       const openBrackets = (fixed.match(/\[/g) || []).length;
       const closeBrackets = (fixed.match(/\]/g) || []).length;
 
-      // Add missing closing brackets/braces
       if (openBrackets > closeBrackets) {
         fixed += ']'.repeat(openBrackets - closeBrackets);
       }
@@ -311,60 +255,27 @@ function parseStreamedResponse(
 
       try {
         parsed = JSON.parse(fixed);
-        console.log('Successfully fixed incomplete JSON');
-      } catch (e2) {
-        console.log('Could not fix JSON, returning empty array');
+      } catch {
         return [];
       }
     }
 
     if (!parsed.events || !Array.isArray(parsed.events)) {
-      console.log('❌ No events array in parsed JSON');
-      console.log('Parsed object keys:', Object.keys(parsed));
       return [];
     }
 
-    console.log(`✅ Found ${parsed.events.length} total events in JSON`);
-    console.log(`Skipping first ${skipCount} events (already processed)`);
-
-    if (parsed.events.length > 0) {
-      console.log(`First event in JSON: "${parsed.events[0]?.title}"`);
-      console.log(`Last event in JSON: "${parsed.events[parsed.events.length - 1]?.title}"`);
-    }
-
     const newEvents = parsed.events.slice(skipCount);
-    console.log(`Processing ${newEvents.length} new events (after skipping ${skipCount})`);
-
     const events: CalendarEvent[] = [];
-    let convertedCount = 0;
-    let failedCount = 0;
 
-    for (let i = 0; i < newEvents.length; i++) {
-      const eventData = newEvents[i];
+    for (const eventData of newEvents) {
       const event = convertToCalendarEvent(eventData, context);
       if (event) {
         events.push(event);
-        convertedCount++;
-        if (i < 3 || i >= newEvents.length - 3) {
-          console.log(`  Converted event ${i + 1}: "${event.title}"`);
-        }
-      } else {
-        failedCount++;
-        console.log(`  ❌ Failed to convert event ${i + 1}: "${eventData?.title || 'unknown'}"`);
       }
     }
 
-    console.log(`✅ Successfully converted: ${convertedCount} events`);
-    if (failedCount > 0) {
-      console.log(`❌ Failed to convert: ${failedCount} events`);
-    }
-    console.log(`Returning ${events.length} new events`);
     return events;
-  } catch (error) {
-    console.error(
-      'Error parsing streamed response:',
-      error instanceof Error ? error.message : String(error)
-    );
+  } catch {
     return [];
   }
 }
@@ -410,7 +321,7 @@ function convertToCalendarEvent(data: unknown, context?: ExtractionContext): Cal
       recurringRule: event.recurringRule as string | undefined,
       url: event.url as string | undefined,
     };
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -474,17 +385,4 @@ export function validateExtraction(events: unknown[]): ValidationResult {
     validatedEvents,
     invalidEvents,
   };
-}
-
-/**
- * Estimate API cost for content
- */
-export function estimateCost(content: string): number {
-  const estimatedInputTokens = Math.ceil(content.length / 4);
-  const estimatedOutputTokens = 2000;
-
-  const inputCost = (estimatedInputTokens / 1_000_000) * 0.25;
-  const outputCost = (estimatedOutputTokens / 1_000_000) * 1.25;
-
-  return inputCost + outputCost;
 }

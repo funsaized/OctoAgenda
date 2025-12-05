@@ -1,59 +1,11 @@
 import { ScraperConfig } from '@/lib/api/types/index';
 
 /**
- * Processing constants used throughout the application
- */
-export const PROCESSING_CONSTANTS = {
-  // Token estimation
-  CHARS_PER_TOKEN: 4,
-  AVG_CHARS_PER_TOKEN: 4,
-
-  // Chunking configuration
-  CHUNK_SIZE_TOKENS: 800,
-  CHUNK_OVERLAP_TOKENS: 100,
-  MAX_CHUNKS_PER_BATCH: 15,
-  MAX_TOKENS_PER_CHUNK: 3000,
-
-  // Content length thresholds
-  MIN_CONTENT_LENGTH: 20,
-  MAX_CONTENT_LENGTH: 5000,
-  MIN_BLOCK_LENGTH: 20,
-  MAX_BLOCK_LENGTH: 3000,
-
-  // Quality thresholds
-  QUALITY_THRESHOLD: 0.3,
-  MIN_RELEVANCE_THRESHOLD: 0.1,
-  EVENT_CONFIDENCE_THRESHOLD: 0.15, // Lowered from 0.3 to catch more potential events
-  HIGH_QUALITY_SCORE_THRESHOLD: 0.3,
-
-  // Scoring weights
-  EVENT_SCORE_WEIGHT: 0.6,
-  RELEVANCE_SCORE_WEIGHT: 0.4,
-
-  // Batch processing
-  MAX_PRIORITY_CHUNKS: 20,
-  MAX_EVENT_CONTAINERS: 10,
-  AI_CONCURRENCY: 3,
-
-  // Deduplication
-  STRING_SIMILARITY_THRESHOLD: 0.8,
-  TIME_MATCH_THRESHOLD_MS: 60000, // 1 minute
-
-  // Default durations
-  DEFAULT_EVENT_DURATION_HOURS: 2,
-
-  // Cache limits
-  MAX_BLOCKS_PER_PAGE: 50,
-} as const;
-
-/**
  * Validate and transform request body into scraper configuration
  */
 export function validateConfig(body: unknown): ScraperConfig {
-  // Type guard and validate body structure
   const requestBody = body as Record<string, unknown>;
 
-  // Validate URL
   if (!requestBody.url || typeof requestBody.url !== 'string') {
     throw new Error('URL is required and must be a string');
   }
@@ -64,7 +16,6 @@ export function validateConfig(body: unknown): ScraperConfig {
     throw new Error('Invalid URL format');
   }
 
-  // Build config from request body
   const config: ScraperConfig = {
     source: {
       url: requestBody.url,
@@ -92,11 +43,9 @@ export function validateConfig(body: unknown): ScraperConfig {
       calendarName: (requestBody.calendarName as string) || 'Scraped Events',
       timezone:
         (requestBody.timezone as string) || process.env.DEFAULT_TIMEZONE || 'America/New_York',
-      // detectTimezone: requestBody.detectTimezone !== false && (process.env.DETECT_TIMEZONE !== 'false')
     },
   };
 
-  // Validate required fields
   if (!config.processing?.ai?.apiKey) {
     throw new Error('ANTHROPIC_API_KEY environment variable is required');
   }
@@ -106,29 +55,4 @@ export function validateConfig(body: unknown): ScraperConfig {
   }
 
   return config;
-}
-
-/**
- * Get default configuration
- */
-export function getDefaultConfig(): Partial<ScraperConfig> {
-  return {
-    processing: {
-      retry: {
-        maxAttempts: parseInt(process.env.RETRY_ATTEMPTS || '3', 10),
-        initialDelay: 1000,
-        maxDelay: 30000,
-        backoffMultiplier: 2,
-      },
-      ai: {
-        model: 'claude-haiku-4-5-20251001',
-        maxContinuations: parseInt(process.env.MAX_CONTINUATIONS || '10', 10),
-        apiKey: process.env.ANTHROPIC_API_KEY || '',
-      },
-    },
-    ics: {
-      timezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
-      // detectTimezone: process.env.DETECT_TIMEZONE !== 'false'
-    },
-  };
 }
