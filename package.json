@@ -12,8 +12,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.1",
-    "@mendable/firecrawl-js": "^4.25.4",
+    "@anthropic-ai/sdk": "^0.105.0",
+    "@mendable/firecrawl-js": "^4.28.2",
     "@types/bunyan": "^1.8.11",
     "bootstrap": "^5.3.8",
     "bunyan": "^1.8.15",
@@ -28,7 +28,7 @@
     "partial-json": "^0.1.7",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "react-hook-form": "^7.79.0",
+    "react-hook-form": "^7.80.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
