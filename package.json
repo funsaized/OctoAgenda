@@ -12,8 +12,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.105.0",
-    "@mendable/firecrawl-js": "^4.28.2",
+    "@anthropic-ai/sdk": "^0.106.0",
+    "@mendable/firecrawl-js": "^4.28.3",
     "@types/bunyan": "^1.8.11",
     "bootstrap": "^5.3.8",
     "bunyan": "^1.8.15",
